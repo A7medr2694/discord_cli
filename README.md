@@ -1,116 +1,312 @@
-# discord-cli
+# discord — Your Discord, Driven From the Terminal
 
-**A Rust Discord CLI + MCP server for AI agents** — read, send, search, and manage Discord as the **logged-in user** (user-token / self-bot style), so it works in *every* server, group, and DM you belong to — no bot invitation needed.
+<div align="center">
+  <img src="docs/assets/discord_illustration.webp"
+       alt="discord — read, send, search, and manage any server/DM you belong to, as yourself"
+       width="600">
+</div>
 
-> ⚠️ **ToS / account-risk warning**
->
-> Automating a user account violates Discord's Terms of Service and can result in **account termination**. This tool is for accounts you control, on machines you control. Use it with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit confirmation.
+<div align="center">
+
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue.svg)
+![Rust](https://img.shields.io/badge/Rust-stable-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+
+</div>
+
+**A Discord CLI + MCP server that operates your *user account* — so it sees every server, group, and DM you belong to. No bot invitation required.**  
+Built in Rust for AI agents and terminal-first humans: 33 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
+
+> ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`.
 
 ---
 
-## Why not a bot?
+## 🤖 Agent Quickstart (Robot Mode)
 
-A Discord **bot** can only read channels it is invited to. A **user token** reads *everything* the account can see — every server you've joined, every DM, every thread. That's the core requirement for an AI agent managing your account on your behalf.
-
-## Features
-
-- **Read anything**: `guilds`, `channels`, `dms` (DM + group-DM), `history`, `read`, `members`, `info`, `guild-search` (native), `threads` (with user-token fallback), `roles`, `profile`, `relationships`, `pins`
-- **Send / act**: `send` (with `--confirm` safety), `edit`, `delete`, `react`, `pin`, `dm-group` (create/add/remove), `notify`
-- **Archive offline**: `sync` / `sync-all` → SQLite + FTS5 full-text search, then `search`, `recent`, `stats`, `top`, `export`, `purge`
-- **Live**: `tail` / `watch` — JSONL streams over the gateway (invisible presence)
-- **AI-ready**: `serve` starts an **MCP server** (stdio) exposing 11 tools; all commands emit **JSONL/JSON/YAML** with a stable envelope
-- **Stealth**: browser UA + `X-Super-Properties` + `launch_signature` mask + per-install `device_id`
-
-## Install
+This tool is built for AI agents. Every command emits **machine-readable JSON/JSONL** — never a bare interactive UI.
 
 ```bash
-cargo build --release
-# binary: target/release/discord(.exe)
-```
-
-Requires Rust 1.80+. The workspace uses `[patch]`-free deps and `tokio_unstable` cfg for `discord-user-rs` (see `.cargo/config.toml`).
-
-## Quick start
-
-```bash
-# 1. Authenticate (auto-detect from local Discord/browser, or paste)
+# 1) Authenticate once (auto-detect from local Discord/browser, or paste)
 discord auth --save
-# or: discord auth --paste --save
 
-# 2. Verify
-discord status
-discord whoami
+# 2) "What can I see?" — discovery
+discord guilds --json
+discord dms --json
 
-# 3. Explore
-discord guilds
-discord channels <GUILD>
-discord dms
+# 3) Read a channel (the agent-facing read)
+discord read "guide" -l 20 --json
 
-# 4. Read a channel (agent-facing)
-discord read <CHANNEL> -l 50 --json
-
-# 5. Archive + search offline
+# 4) Archive + search offline
 discord sync-all -l 200
-discord search "keyword"
-discord recent --hours 24
-discord stats
-discord top
+discord search "deploy" -n 50
 
-# 6. Live follow
-discord watch --channel <ID> --keyword "deploy"
+# 5) Reply (gated — needs --confirm for new messages)
+discord send "guide" --text "Deploy looks good" --reply 1087808713206804713
+
+# 6) Or run the full MCP server
+claude mcp add discord --env DISCORD_TOKEN=$DISCORD_TOKEN -- $(which discord) serve
 ```
 
-## Output contract
+**Output contract**
 
-- **Piped stdout → JSONL** (one object per line); TTY → human.
-- `--json` / `--yaml` force a single envelope:
-  ```json
-  { "ok": true, "schema_version": "1", "data": [...] }
-  { "ok": false, "schema_version": "1", "error": { "code": "NotFound", "message": "..." } }
-  ```
-- Errors → **stderr**, data → **stdout**.
-- **Exit codes**: `0` ok, `1` error, `2` usage (e.g. missing `--confirm`), `3` not found, `4` forbidden, `5` network.
+- **stdout** = data only (JSONL when piped, `--json` for a single envelope)
+- **stderr** = diagnostics
+- **exit 0** = success, **2** = usage (missing `--confirm`), **3** = not found, **4** = forbidden
+- Envelope: `{"ok":true,"schema_version":"1","data":[...]}` / `{"ok":false,...,"error":{...}}`
 
-## MCP server (for AI agents)
+See [AGENTS.md](AGENTS.md) for the full agent playbook (summarize / explore / reply / watch).
+
+---
+
+## TL;DR
+
+### The Problem
+
+- **Bots are blind.** A Discord bot only sees channels it was invited to — you can't have an AI read your private DMs, your friends' server, or a channel you joined years ago.
+- **The app is manual.** Opening Discord to read/search/reply is slow; scripting it means fighting a GUI.
+- **Self-botting is risky.** Unofficial user-token tools often scrape aggressively and get accounts banned.
+
+### The Solution
+
+**discord** reads and writes Discord **as your own account** — every guild, group, and DM you belong to — from the terminal, with the same browser-like fingerprint a real client would send (UA, `X-Super-Properties`, per-install `device_id`). It archives what you read into SQLite for instant offline search, and exposes everything to agents over both CLI and MCP.
 
 ```bash
-# Add to Claude Code
-claude mcp add discord --env DISCORD_TOKEN=$DISCORD_TOKEN -- <abs-path>/discord serve
+discord guilds
+discord read "general" -l 20
+discord search "meeting notes"
 ```
 
-The server exposes 11 tools: `list_guilds`, `list_channels`, `list_dms`, `read_messages`, `read_dm`, `get_message`, `send_message` (gate behind approval), `search_messages`, `list_members`, `list_threads`, `get_sync_status`. All return JSON.
+### Why discord?
 
-**Example agent flow**: "list my servers → read the last 10 messages in #general → reply."
+| Feature | What it does |
+|---------|----------------|
+| **Sees everything you can** | Reads any server/DM/thread you belong to — no bot invite |
+| **Agent-native output** | JSONL/JSON envelope + exit-code contract on every command |
+| **MCP server** | `discord serve` → 11 tools for Claude Code, Cursor, etc. |
+| **Offline archive** | `sync` → SQLite + FTS5 full-text search, `search`/`recent`/`stats`/`top` |
+| **Stealth-aware** | Browser UA + `X-Super-Properties` + `launch_signature` mask + `device_id` |
+| **Safe by default** | `--confirm`/`--dry-run` on destructive ops, bounded sync, rate-limit backoff, invisible presence |
+| **Live follows** | `tail` / `watch` stream new messages as JSONL over the gateway |
+| **Cross-platform** | Single Rust binary for Linux / macOS / Windows |
 
-## Safety defaults
+### How discord Compares
 
-- `--confirm` required for destructive / non-reply sends (never interactive).
-- `--dry-run` previews without acting.
-- Rate limiting: jitter between pages, `429` backoff (2s→10s), `X-RateLimit-*` honored, Cloudflare-1015 invalid-request budget.
-- `sync-all` is bounded per channel (default 200).
-- Gateway presence defaults to **Invisible**.
-- `purge` only touches the local archive, never Discord.
+| Capability | discord | Discord bot | discord.py self-bot | Terminal Discord app |
+|-----------|---------|-------------|---------------------|----------------------|
+| Read any channel you belong to | **Yes** | Only invited | Yes | Yes |
+| Agent-friendly (JSON/JSONL/MCP) | **Yes** | Via libs | No | No |
+| Offline search archive | **Yes** | No | No | No |
+| Stealth fingerprinting | **Yes** | N/A | Partial | Partial |
+| Safe write gating (`--confirm`) | **Yes** | Manual | Manual | N/A |
+| Banned-account risk | ⚠️ Low if cautious | None | ⚠️ High if careless | None |
+| Setup friction | **`discord auth`** | App + invite + intents | Token scraping | Install app |
 
-## Project layout
+---
+
+## Quick Example
+
+```bash
+# Authenticate (auto-detect from your local Discord/Chrome session)
+discord auth --save                 # → {"authenticated":true,"source":"Chrome"}
+
+# Verify who you are
+discord whoami --json               # id, username, global_name, mfa_enabled
+
+# Explore — what servers and DMs do you belong to?
+discord guilds --json               # every guild you've joined
+discord dms --json                  # DM + group-DM channels, labeled
+
+# Drill into a server's channels
+discord channels "TDG" --json       # text/announcement/forum, sorted
+
+# Read recent messages (agent-friendly)
+discord read "guide" -l 10 --json   # message_id, author, timestamp, content
+
+# Archive a channel for offline search
+discord sync "guide" -l 500         # → {"messages_synced": N}
+discord search "release" -n 20      # FTS5 over the local SQLite archive
+discord stats --json                # per-channel counts
+
+# Act (gated)
+discord send "guide" --text "hi" --confirm       # requires --confirm
+discord send "guide" --text "re:" --reply <MSG_ID>  # reply is auto-approved
+discord react "guide" <MSG_ID> "👍"
+
+# Live follow a keyword
+discord watch --keyword "incident" --jsonl
+```
+
+---
+
+## Commands
+
+### Auth & identity
+
+| Command | What it does |
+|---------|--------------|
+| `auth [--save] [--paste]` | Auto-detect token from local Discord/browser, or paste; validate + save |
+| `status` | Validate configured token (exit 1 on failure) |
+| `whoami [--json]` | Show the authenticated user's profile |
+
+### Read
+
+| Command | What it does |
+|---------|--------------|
+| `guilds` | List every server you belong to |
+| `channels <GUILD>` | List text/announcement/forum channels |
+| `dms` | List DM + group-DM channels |
+| `history <CH> [-l N] [--before/--after]` | Paginated message history |
+| `read <CH> [-l N] [--before ID]` | Recent messages — the agent-facing read |
+| `members <GUILD> [--max N]` | Guild members |
+| `info <GUILD>` | Guild name, member/online counts |
+| `guild-search <GUILD> <QUERY>` | Discord native search |
+| `roles <GUILD>` | Guild roles, by position |
+| `profile [USER_ID]` | User profile (default: self) |
+| `relationships` | Friends / blocked / pending |
+| `threads <CH>` | Active threads (user-token fallback) |
+| `pins <CH>` | Pinned messages |
+
+### Act
+
+| Command | What it does |
+|---------|--------------|
+| `send <CH> --text "..." [--reply ID] [--confirm]` | Send / reply (gated) |
+| `edit <CH> <MSG_ID> --text "..."` | Edit own message |
+| `delete <CH> <MSG_ID> [--confirm]` | Delete own message (gated) |
+| `react` / `unreact` | Add / remove a reaction |
+| `pin <CH> <MSG_ID>` | Pin a message |
+| `dm-group create/add/remove` | Group-DM management (gated create) |
+| `notify guild/channel` | Notification settings |
+
+### Archive & query (local SQLite + FTS5)
+
+| Command | What it does |
+|---------|--------------|
+| `sync <CH> [-l N]` | Incremental two-phase sync to SQLite |
+| `sync-all [-l N]` | Discover + sync accessible channels (bounded) |
+| `search <KW> [-c CH] [-n N]` | FTS5 full-text search |
+| `recent [--hours N]` | Newest stored messages |
+| `stats` | Per-channel counts |
+| `top [-c CH]` | Top senders |
+| `export <CH> [-f json] [-o FILE]` | Export archive |
+| `purge <CH> [-y]` | Delete archive for a channel (gated) |
+
+### Live & AI
+
+| Command | What it does |
+|---------|--------------|
+| `tail <CH> [--once]` | Gateway live follow (invisible presence) |
+| `watch [--channel C] [--keyword K]` | Long-running JSONL stream for agents |
+| `serve` | MCP server (stdio, 11 tools) |
+
+---
+
+## Installation
+
+```bash
+# From source (requires Rust 1.80+)
+cargo install --path crates/discord-cli --locked
+# or build the workspace binary
+cargo build --release && cp target/release/discord /usr/local/bin/
+```
+
+The workspace uses a `tokio_unstable` cfg for `discord-user-rs` (see `.cargo/config.toml`); `cargo build` handles it.
+
+---
+
+## Architecture
 
 ```
 crates/
-  discord-core/   client (REST), stealth, config, types, output envelope
-  discord-auth/   token auto-detect (LevelDB), paste, keyring, device_id
-  discord-db/     SQLite schema, FTS5 search, sync state
-  discord-cli/    the `discord` binary + commands
-  discord-mcp/    MCP server (rmcp stdio)
-scripts/          clone research repos + e2e smoke test
+  discord-core/   REST client, stealth (X-Super-Properties, launch_signature),
+                  config, types, output envelope
+  discord-auth/   token auto-detect (LevelDB scan), paste, keyring, device_id
+  discord-db/     SQLite schema, FTS5 search, two-phase sync state
+  discord-cli/    the `discord` binary + 33 commands
+  discord-mcp/    MCP server (rmcp stdio) — 11 tools
 ```
+
+**Design principles**
+
+| Principle | What it means |
+|-----------|---------------|
+| **Transport first** | `discord-core` wraps `discord-user-rs`; every command is a thin layer |
+| **Agent-first output** | JSONL/JSON envelope + exit codes on every surface |
+| **Stealth by default** | Real-client headers + per-install identity from day one |
+| **Safety gating** | `--confirm` / `--dry-run` never interactive |
+| **Local-first archive** | Read once, query forever (SQLite + FTS5) |
+| **Bounded by design** | Sync caps, rate-limit backoff, invisible presence |
+
+---
+
+## Safety & Rate Limits
+
+| Guard | What it does |
+|-------|--------------|
+| `--confirm` | Required for destructive / non-reply sends (never interactive) |
+| `--dry-run` | Preview what would happen without acting |
+| Rate limiting | Jitter between pages, `429` backoff (2s→10s), honors `X-RateLimit-*` |
+| Invalid-request budget | Cloudflare-1015 protection (warn at 7k, stop at 9.5k) |
+| `sync-all` bounded | Per-channel cap (default 200) |
+| Gateway presence | Defaults to **Invisible** |
+| `purge` | Only touches local archive, never Discord |
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `status` exits 1 | No token configured | `discord auth --save` or `--paste` |
+| `auth` finds tokens but none validate | Stale tokens in LevelDB | `discord auth --paste` manually |
+| `guilds` returns API error | Token expired / invalid | Re-auth; check `status` |
+| `sync` reports "upsert message" | Local DB missing channel row | `sync` now auto-upserts; re-run |
+| `search` returns empty | No archive yet | `discord sync-all -l 200` first |
+| Rate-limited (429s) | Too many requests | Wait; reduce `-l`; check `stats` |
+
+## Limitations
+
+- **User-token automation violates Discord ToS** — accounts can be banned. Use sparingly.
+- `guild-search` is per-guild (Discord's native search has no global scope).
+- `sync` stores text content; attachments/embeds are not downloaded (extendable).
+- Gateway `tail`/`watch` require a live connection; `--once` fetches a bounded window.
+- MCP `send_message` is intentionally not auto-approved in clients — agents must request approval.
+
+## FAQ
+
+**Q: Why user token instead of a bot?**  
+A bot only sees channels it's invited to. A user token sees everything you belong to — that's the whole point of an account-level CLI for an agent.
+
+**Q: Will I get banned?**  
+Automating a user account violates ToS and bans are possible. This tool is designed to *reduce* risk (real-client headers, bounded reads, invisible presence) but cannot eliminate it. Use on accounts you control.
+
+**Q: How do I get a token?**  
+`discord auth --save` scans your local Discord/Chrome LevelDB. Or `discord auth --paste` and paste it from DevTools → Network → Authorization header.
+
+**Q: Where is my data stored?**  
+SQLite at the platform data dir (`$LOCALAPPDATA/discord-cli/` on Windows, `~/.local/share/discord-cli/` on Linux, `~/Library/Application Support/discord-cli/` on macOS). Override with `DB_PATH`.
+
+**Q: Can an AI agent use this?**  
+Yes — that's the primary design. `--json`/JSONL everywhere, `discord serve` for MCP, and [AGENTS.md](AGENTS.md) documents the playbook.
+
+**Q: Does it work on Windows?**  
+Yes — built and tested on Windows, macOS, and Linux. Single static binary, no CGO.
+
+**Q: How do I stop `watch`/`tail`?**  
+Ctrl+C. They run until interrupted.
+
+---
 
 ## Development
 
 ```bash
-cargo build         # debug
-cargo test          # 44 unit/integration tests
-./scripts/e2e.sh    # real-token smoke (DISCORD_TOKEN required)
+cargo build          # debug
+cargo test           # 44 unit/integration tests (no network required)
+./scripts/e2e.sh     # real-token smoke (needs DISCORD_TOKEN)
 ```
 
-## License
+Repo layout: research clones in `.tmp/` (source of truth for patterns), plan in `COMPREHENSIVEPLANFORDISCORDCLI.md`, task graph in `.beads/`.
 
-MIT.
+---
+
+**Solves "I can't have an AI read my Discord" — by being the account, not a guest.**
