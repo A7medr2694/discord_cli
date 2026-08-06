@@ -11,7 +11,7 @@ use discord_user::client::DiscordHttpClient;
 use discord_user::route::Route;
 
 use crate::config::{API_BASE, resolve_token};
-use crate::types::{Channel, Guild, Me};
+use crate::types::{Channel, DmChannel, Guild, Me};
 
 /// Authenticated API client backed by `discord-user-rs`.
 ///
@@ -117,6 +117,38 @@ impl ApiClient {
         channels.retain(|c| c.is_text_like());
         channels.sort_by_key(|c| c.position.unwrap_or(0));
         Ok(channels)
+    }
+
+    /// `GET /users/@me/channels` — DM + group-DM channels.
+    /// `Route::CreateDm` maps to that path (POST creates; GET lists).
+    pub async fn list_dms(&mut self) -> Result<Vec<DmChannel>> {
+        let inner = self.inner()?;
+        let raw: Vec<RawDm> = inner.get(Route::CreateDm).await.context("GET /users/@me/channels failed")?;
+        let mut dms: Vec<DmChannel> = raw
+            .into_iter()
+            .map(|d| {
+                let recipient_count = d.recipients.as_ref().map(|r| r.len());
+                let recipients: Vec<String> = d
+                    .recipients
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|u| u.tag())
+                    .collect();
+                let label = match recipients.len() {
+                    0 => d.name.clone().unwrap_or_else(|| d.id.to_string()),
+                    1 => recipients[0].clone(),
+                    _ => recipients.join(", "),
+                };
+                DmChannel {
+                    id: d.id.to_string(),
+                    label,
+                    channel_type: d.channel_type,
+                    recipient_count,
+                }
+            })
+            .collect();
+        dms.sort_by(|a, b| a.label.cmp(&b.label));
+        Ok(dms)
     }
 
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
@@ -229,6 +261,44 @@ struct RawMessage {
 struct RawAuthor {
     id: u64,
     username: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawDm {
+    id: u64,
+    #[serde(rename = "type")]
+    channel_type: u8,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    recipients: Option<Vec<RawDmUser>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawDmUser {
+    id: u64,
+    username: String,
+    #[serde(default)]
+    discriminator: Option<String>,
+    #[serde(default)]
+    global_name: Option<String>,
+}
+
+impl RawDmUser {
+    /// Human label `user#disc` or `global_name` fallback.
+    fn tag(&self) -> String {
+        if let Some(g) = &self.global_name {
+            if !g.is_empty() {
+                return g.clone();
+            }
+        }
+        if let Some(d) = &self.discriminator {
+            if d != "0" {
+                return format!("{}#{}", self.username, d);
+            }
+        }
+        self.username.clone()
+    }
 }
 
 /// The REST base, re-exported for callers that need the full URL.

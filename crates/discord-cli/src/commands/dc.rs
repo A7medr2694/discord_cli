@@ -26,6 +26,22 @@ pub enum DcCmd {
         /// Guild name or ID.
         guild: String,
     },
+    /// List DM + group-DM channels.
+    Dms,
+    /// Fetch message history of a channel (paginated).
+    History {
+        /// Channel name or ID (in the resolved guild).
+        channel: String,
+        /// Max messages to fetch (default 1000, max 1000).
+        #[arg(short, long, default_value_t = 1000)]
+        limit: usize,
+        /// Fetch messages before this snowflake.
+        #[arg(long)]
+        before: Option<u64>,
+        /// Fetch messages after this snowflake.
+        #[arg(long)]
+        after: Option<u64>,
+    },
 }
 
 impl DcCtx {
@@ -73,10 +89,80 @@ pub async fn dc_channels(ctx: &DcCtx, guild: &str) -> ExitCode {
     }
 }
 
+/// `dc dms`
+pub async fn dc_dms(ctx: &DcCtx) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    match client.list_dms().await {
+        Ok(dms) => {
+            let _ = output::emit(&dms, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc history <CHANNEL>` — channel is an ID (or we resolve via a guild).
+pub async fn dc_history(
+    ctx: &DcCtx,
+    channel: &str,
+    limit: usize,
+    before: Option<u64>,
+    after: Option<u64>,
+) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    // If channel is all-digits, use as channel ID directly.
+    let channel_id = if channel.chars().all(|c| c.is_ascii_digit()) {
+        channel.to_string()
+    } else {
+        // Otherwise try to resolve via the first guild containing it.
+        let guilds = match client.list_guilds().await {
+            Ok(g) => g,
+            Err(e) => return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        };
+        let mut found = None;
+        for g in &guilds {
+            if let Ok(chs) = client.list_channels(&g.id).await {
+                if let Some(c) = chs.iter().find(|c| c.name.to_lowercase() == channel.to_lowercase()) {
+                    found = Some(c.id.clone());
+                    break;
+                }
+            }
+        }
+        match found {
+            Some(id) => id,
+            None => {
+                return ExitCode::from(output::emit_error(
+                    "NotFound",
+                    &format!("channel \"{channel}\" not found"),
+                    exit::NOT_FOUND,
+                ))
+            }
+        }
+    };
+
+    match client.fetch_messages(&channel_id, limit, before, after).await {
+        Ok(msgs) => {
+            let _ = output::emit(&msgs, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
         DcCmd::Guilds => dc_guilds(ctx).await,
         DcCmd::Channels { guild } => dc_channels(ctx, &guild).await,
+        DcCmd::Dms => dc_dms(ctx).await,
+        DcCmd::History { channel, limit, before, after } => {
+            dc_history(ctx, &channel, limit, before, after).await
+        }
     }
 }
