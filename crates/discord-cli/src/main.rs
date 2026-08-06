@@ -93,6 +93,25 @@ enum Command {
         #[arg(short, long, default_value_t = 10)]
         limit: usize,
     },
+    /// Export stored messages for a channel.
+    Export {
+        /// Channel ID.
+        channel: String,
+        /// Output as JSON (default text).
+        #[arg(long)]
+        json: bool,
+        /// Output file path.
+        #[arg(short, long)]
+        output: Option<String>,
+    },
+    /// Delete stored messages for a channel (requires -y).
+    Purge {
+        /// Channel ID.
+        channel: String,
+        /// Confirm purge.
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -141,6 +160,12 @@ async fn run() -> ExitCode {
         Some(Command::Stats) => commands::local::cmd_stats(format),
         Some(Command::Top { channel, limit }) => {
             commands::local::cmd_top(channel.as_deref(), limit, format)
+        }
+        Some(Command::Export { channel, json, output }) => {
+            commands::local::cmd_export(&channel, json, output.as_deref(), format)
+        }
+        Some(Command::Purge { channel, yes }) => {
+            commands::local::cmd_purge(&channel, yes, format)
         }
         None => {
             // No subcommand: print help.

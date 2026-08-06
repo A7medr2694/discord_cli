@@ -46,3 +46,12 @@ pub struct TopSender {
     pub author_name: String,
     pub message_count: i64,
 }
+
+/// Export row (id, author, content, timestamp).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExportRow {
+    pub id: String,
+    pub author_name: String,
+    pub content: String,
+    pub timestamp: String,
+}

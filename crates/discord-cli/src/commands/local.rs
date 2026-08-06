@@ -73,6 +73,76 @@ pub fn cmd_stats(format: Format) -> ExitCode {
     }
 }
 
+/// `export <CHANNEL> [-f text|json] [-o FILE]` — export stored messages.
+pub fn cmd_export(
+    channel: &str,
+    as_json: bool,
+    output: Option<&str>,
+    format: Format,
+) -> ExitCode {
+    let db_path = match config::db_path() {
+        Ok(p) => p,
+        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    };
+    let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
+        Ok(c) => c,
+        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    };
+    let channel_id = channel.to_string();
+    match ddb::channel_messages(&conn, &channel_id, 1_000_000) {
+        Ok(rows) => {
+            let text = if as_json {
+                serde_json::to_string_pretty(&rows).unwrap_or_else(|_| "[]".into())
+            } else {
+                rows.iter()
+                    .map(|r| format!("[{}] {}: {}", r.timestamp, r.author_name, r.content))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            if let Some(path) = output {
+                match std::fs::write(path, &text) {
+                    Ok(_) => {
+                        let data = serde_json::json!({ "exported": true, "file": path, "messages": rows.len() });
+                        let _ = output::emit(&data, format);
+                        ExitCode::from(exit::OK)
+                    }
+                    Err(e) => {
+                        ExitCode::from(output::emit_error("IOError", &e.to_string(), exit::ERROR))
+                    }
+                }
+            } else {
+                println!("{}", text);
+                ExitCode::from(exit::OK)
+            }
+        }
+        Err(e) => ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `purge <CHANNEL> [-y]` — delete stored messages for a channel.
+pub fn cmd_purge(channel: &str, yes: bool, format: Format) -> ExitCode {
+    if !yes {
+        eprintln!("This will delete stored messages for channel \"{channel}\". Add -y to proceed.");
+        return ExitCode::from(exit::USAGE);
+    }
+    let db_path = match config::db_path() {
+        Ok(p) => p,
+        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    };
+    let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
+        Ok(c) => c,
+        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    };
+    match ddb::purge_channel(&conn, channel) {
+        Ok(n) => {
+            let data = serde_json::json!({ "purged": true, "channel": channel, "messages_deleted": n });
+            let _ = output::emit(&data, format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// `top [-c CH]` — top senders.
 pub fn cmd_top(channel: Option<&str>, limit: usize, format: Format) -> ExitCode {
     let db_path = match config::db_path() {

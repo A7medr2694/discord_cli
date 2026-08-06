@@ -271,6 +271,44 @@ pub fn top_senders(conn: &Connection, channel_name: Option<&str>, limit: i64) ->
     Ok(out)
 }
 
+/// Export messages for a channel (id, author, content, timestamp).
+pub fn channel_messages(
+    conn: &Connection,
+    channel_id: &str,
+    limit: i64,
+) -> Result<Vec<crate::ExportRow>> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, author_name, content, timestamp
+        FROM messages
+        WHERE channel_id = ?1
+        ORDER BY timestamp
+        LIMIT ?2
+        "#,
+    )?;
+    let rows = stmt.query_map(params![channel_id, limit], |row| {
+        Ok(crate::ExportRow {
+            id: row.get(0)?,
+            author_name: row.get(1)?,
+            content: row.get(2)?,
+            timestamp: row.get(3)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Delete all stored messages for a channel. Returns rows deleted.
+pub fn purge_channel(conn: &Connection, channel_id: &str) -> Result<usize> {
+    let n = conn
+        .execute("DELETE FROM messages WHERE channel_id = ?1", params![channel_id])
+        .context("purge channel")?;
+    Ok(n)
+}
+
 /// FTS5 full-text search over stored messages (langkurt SQL, bind verbatim).
 pub fn search_messages(
     conn: &Connection,
