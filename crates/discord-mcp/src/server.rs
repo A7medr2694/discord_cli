@@ -53,6 +53,24 @@ pub struct SendParams {
     pub files: Option<Vec<String>>,
 }
 
+/// Join a server via invite.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct JoinParams {
+    /// Invite code or full URL (discord.gg/..., discord.com/invite/...).
+    pub invite_code: String,
+    /// Must be true to actually join (advisory — client-side approval).
+    pub confirm: bool,
+}
+
+/// Leave a server.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct LeaveParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Must be true to actually leave (advisory — client-side approval).
+    pub confirm: bool,
+}
+
 /// Get single message parameter.
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct GetMessageParams {
@@ -248,6 +266,59 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Join a server via invite code or URL.
+    ///
+    /// Previews the invite (guild name, member count) then accepts. The
+    /// `confirm` flag is advisory — client-side approval is the real gate.
+    #[tool(description = "Join a server via invite code or URL. confirm must be true (advisory).")]
+    pub async fn join_guild(
+        &self,
+        Parameters(req): Parameters<JoinParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("join_guild requires confirm: true".into());
+        }
+        let code = match ApiClient::extract_invite_code(&req.invite_code) {
+            Some(c) => c.to_string(),
+            None => return Err(format!("invalid invite: {}", req.invite_code)),
+        };
+        let mut c = self.client()?;
+        // Preview first, then accept (satisfies the {guild_name,members} contract).
+        let info = c.get_invite(&code).await.map_err(|e| e.to_string())?;
+        let guild_name = info
+            .guild
+            .as_ref()
+            .and_then(|g| g.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+        let members = info.approximate_member_count.unwrap_or(0);
+        c.accept_invite(&code).await.map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({
+            "joined": true,
+            "invite_code": code,
+            "guild_name": guild_name,
+            "approximate_member_count": members,
+        })
+        .to_string())
+    }
+
+    /// Leave a server.
+    ///
+    /// The `confirm` flag is advisory — client-side approval is the real gate.
+    #[tool(description = "Leave a server by guild_id. confirm must be true (advisory).")]
+    pub async fn leave_guild(
+        &self,
+        Parameters(req): Parameters<LeaveParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("leave_guild requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.leave_guild(&req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "left": true, "guild_id": req.guild_id }).to_string())
     }
 
     /// Get a single message by channel + message ID.
