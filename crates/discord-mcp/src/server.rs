@@ -60,6 +60,23 @@ pub struct GetMessageParams {
     pub message_id: String,
 }
 
+/// List members parameter.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct MembersParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Max members (default 50).
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// List threads parameter.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ThreadsParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+}
+
 /// Search message parameter.
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SearchParams {
@@ -180,6 +197,38 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msg).unwrap_or_else(|_| "{}".into()))
+    }
+
+    /// List guild members.
+    #[tool(description = "List members of a guild.")]
+    pub async fn list_members(&self, Parameters(req): Parameters<MembersParams>) -> Result<String, String> {
+        let mut c = self.client()?;
+        let members = c
+            .list_members(&req.guild_id, req.limit.unwrap_or(50))
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::to_string(&members).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// List threads in a channel (user-token fallback).
+    #[tool(description = "List active threads in a channel (handles user-token fallback).")]
+    pub async fn list_threads(&self, Parameters(req): Parameters<ThreadsParams>) -> Result<String, String> {
+        let mut c = self.client()?;
+        let threads = c.list_threads(&req.channel_id).await.map_err(|e| e.to_string())?;
+        Ok(serde_json::to_string(&threads).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Get local archive sync status.
+    #[tool(description = "Get per-channel sync status of the local SQLite archive.")]
+    pub async fn get_sync_status(&self, _params: Parameters<EmptyParams>) -> Result<String, String> {
+        // Best-effort: report whether a local DB exists.
+        let db_path = discord_core::config::db_path().map_err(|e| e.to_string())?;
+        let exists = db_path.exists();
+        Ok(serde_json::json!({
+            "db_path": db_path.to_string_lossy(),
+            "db_exists": exists,
+            "note": "run `discord dc sync-all` to populate the archive"
+        }).to_string())
     }
 }
 
