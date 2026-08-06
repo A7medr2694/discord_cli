@@ -433,6 +433,73 @@ impl ApiClient {
         Ok(resp.id.to_string())
     }
 
+    /// `GET /invites/{code}` — preview an invite (guild name, member counts).
+    /// Reference: RickvanLoo menu.go invite preview; crate Route::Invite.
+    pub async fn get_invite(&mut self, code: &str) -> Result<discord_user::types::Invite> {
+        let inner = self.inner()?;
+        inner
+            .get(Route::Invite {
+                code: std::borrow::Cow::Borrowed(code),
+                with_counts: Some(true),
+                with_expiration: None,
+                guild_scheduled_event_id: None,
+            })
+            .await
+            .context("GET /invites/{code} failed")
+    }
+
+    /// `POST /invites/{code}` — accept an invite (join a server). Nil body.
+    /// Reference: RickvanLoo InviteAccept; crate Route::JoinGuild.
+    pub async fn accept_invite(&mut self, code: &str) -> Result<()> {
+        let inner = self.inner()?;
+        inner
+            .post_no_response(Route::JoinGuild { code }, ())
+            .await
+            .context("POST /invites/{code} failed")?;
+        Ok(())
+    }
+
+    /// `DELETE /users/@me/guilds/{guild_id}` — leave a server.
+    /// Reference: RickvanLoo GuildLeave; crate Route::LeaveGuild.
+    pub async fn leave_guild(&mut self, guild_id: &str) -> Result<()> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let inner = self.inner()?;
+        inner
+            .delete(Route::LeaveGuild { guild_id: gid })
+            .await
+            .context("DELETE /users/@me/guilds/{id} failed")?;
+        Ok(())
+    }
+
+    /// Extract a bare invite code from a full URL or raw code.
+    /// Strips known invite URL prefixes, trailing slashes, and `?`/`#`
+    /// suffixes (review#21). Returns the remaining alnum token.
+    pub fn extract_invite_code(s: &str) -> Option<&str> {
+        let s = s.trim();
+        for prefix in [
+            "https://discord.com/invite/",
+            "http://discord.com/invite/",
+            "https://discordapp.com/invite/",
+            "http://discordapp.com/invite/",
+            "https://discord.gg/",
+            "http://discord.gg/",
+            "discord.gg/",
+        ] {
+            if let Some(rest) = s.strip_prefix(prefix) {
+                let cut = rest.split(['?', '#']).next().unwrap_or(rest);
+                let cut = cut.trim_end_matches('/');
+                return if cut.is_empty() { None } else { Some(cut) };
+            }
+        }
+        let cut = s.split(['?', '#']).next().unwrap_or(s);
+        let cut = cut.trim_end_matches('/');
+        if cut.is_empty() {
+            None
+        } else {
+            Some(cut)
+        }
+    }
+
     /// `POST /channels/{id}/typing` — send typing indicator (no body).
     /// Reference: discordo composer.sendTyping() → Client.Typing (10s throttle
     /// enforced by caller; API itself is fire-and-forget).
@@ -980,6 +1047,43 @@ mod tests {
             let r = randish();
             assert!(r < 400, "randish out of bounds: {r}");
         }
+    }
+
+    #[test]
+    fn extract_invite_code_handles_urls_and_plain() {
+        // Full URLs across known prefixes.
+        assert_eq!(
+            ApiClient::extract_invite_code("https://discord.gg/abc123"),
+            Some("abc123")
+        );
+        assert_eq!(
+            ApiClient::extract_invite_code("https://discord.com/invite/xyz789"),
+            Some("xyz789")
+        );
+        assert_eq!(
+            ApiClient::extract_invite_code("https://discordapp.com/invite/qqq"),
+            Some("qqq")
+        );
+        // Plain code passes through.
+        assert_eq!(ApiClient::extract_invite_code("abc123"), Some("abc123"));
+        // Trailing slash stripped.
+        assert_eq!(
+            ApiClient::extract_invite_code("discord.gg/abc/"),
+            Some("abc")
+        );
+        // ?query and #fragment suffixes stripped (review#21).
+        assert_eq!(
+            ApiClient::extract_invite_code("https://discord.gg/abc?with_counts=1"),
+            Some("abc")
+        );
+        assert_eq!(
+            ApiClient::extract_invite_code("https://discord.gg/abc#section"),
+            Some("abc")
+        );
+        // Empty/edge -> None.
+        assert_eq!(ApiClient::extract_invite_code(""), None);
+        assert_eq!(ApiClient::extract_invite_code("https://discord.gg/"), None);
+        assert_eq!(ApiClient::extract_invite_code("discord.gg/?x=1"), None);
     }
 
     #[test]
