@@ -40,7 +40,9 @@ impl ApiClient {
         if self.client.is_none() {
             let mut c = DiscordHttpClient::new(self.token.clone(), None, false);
             c.set_discord_locale(Some("en-US".to_string()));
-            // X-Super-Properties set in M8 (stealth); for now leave default.
+            // Stealth (M8): attach X-Super-Properties so REST traffic looks
+            // like the real Discord client.
+            c.set_super_properties_b64(Some(crate::stealth::x_super_properties()));
             self.client = Some(c);
         }
         Ok(self.client.as_mut().unwrap())
