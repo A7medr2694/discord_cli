@@ -100,9 +100,12 @@ pub enum DcCmd {
     Send {
         /// Channel name or ID.
         channel: String,
-        /// Message content.
+        /// Message content. "-" reads from stdin.
         #[arg(long)]
-        text: String,
+        text: Option<String>,
+        /// Attach a file (repeatable; max 10 per message).
+        #[arg(long)]
+        file: Vec<String>,
         /// Reply to a message id.
         #[arg(long)]
         reply: Option<String>,
@@ -543,14 +546,91 @@ pub async fn dc_threads(ctx: &DcCtx, channel: &str) -> ExitCode {
 }
 
 /// `dc send <CHANNEL> --text ...` — requires --confirm unless reply/dry-run.
+/// Max attachments per message (Discord limit).
+const MAX_ATTACHMENTS: usize = 10;
+/// Max single-file size (Discord 10MiB base tier).
+const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
+
+/// Exit code for attachment/IO failures (famasya convention).
+pub const EXIT_ATTACHMENT: u8 = 7;
+
+/// Read `--text -` from stdin (Escape-Tech pattern), trimmed of trailing NL.
+async fn read_stdin_text() -> Result<String, ExitCode> {
+    use tokio::io::AsyncReadExt;
+    let mut buf = String::new();
+    tokio::io::stdin()
+        .read_to_string(&mut buf)
+        .await
+        .map_err(|e| {
+            eprintln!("error reading stdin: {e}");
+            ExitCode::from(exit::ERROR)
+        })?;
+    while buf.ends_with('\n') || buf.ends_with('\r') {
+        buf.pop();
+    }
+    Ok(buf)
+}
+
+/// Build attachments from `--file` paths (size + count caps).
+async fn load_attachments(
+    files: &[String],
+) -> Result<Vec<discord_user::types::CreateAttachment>, ExitCode> {
+    if files.len() > MAX_ATTACHMENTS {
+        eprintln!("too many files: max {MAX_ATTACHMENTS} per message");
+        return Err(ExitCode::from(exit::USAGE));
+    }
+    let mut out = Vec::with_capacity(files.len());
+    for path in files {
+        let meta = match tokio::fs::metadata(path).await {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("cannot read file \"{path}\": {e}");
+                return Err(ExitCode::from(EXIT_ATTACHMENT));
+            }
+        };
+        if meta.len() > MAX_FILE_BYTES {
+            eprintln!("file too large (>10MiB): {path}");
+            return Err(ExitCode::from(EXIT_ATTACHMENT));
+        }
+        let data = match tokio::fs::read(path).await {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("cannot read file \"{path}\": {e}");
+                return Err(ExitCode::from(EXIT_ATTACHMENT));
+            }
+        };
+        let filename = std::path::Path::new(path)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.clone());
+        let mime = mime_guess::from_path(path)
+            .first_raw()
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        out.push(discord_user::types::CreateAttachment {
+            filename,
+            data,
+            mime_type: mime,
+            description: None,
+        });
+    }
+    Ok(out)
+}
+
 pub async fn dc_send(
     ctx: &DcCtx,
     channel: &str,
-    text: &str,
+    text: Option<&str>,
+    files: &[String],
     reply: Option<&str>,
     confirm: bool,
     dry_run: bool,
 ) -> ExitCode {
+    // Require text or at least one file.
+    if text.is_none() && files.is_empty() {
+        eprintln!("nothing to send: provide --text (or --text -) and/or --file");
+        return ExitCode::from(exit::USAGE);
+    }
     // Safety (discli pattern): --confirm required for non-reply sends.
     if !confirm && reply.is_none() && !dry_run {
         eprintln!(
@@ -563,11 +643,26 @@ pub async fn dc_send(
             "action": "send_message",
             "channel": channel,
             "text": text,
+            "files": files,
             "reply_to": reply,
         });
         let _ = output::emit(&data, ctx.format);
         return ExitCode::from(exit::OK);
     }
+
+    // Resolve text: "-" reads stdin (Escape-Tech send.js:10-17).
+    let text = match text {
+        Some("-") => match read_stdin_text().await {
+            Ok(t) => t,
+            Err(code) => return code,
+        },
+        Some(t) => t.to_string(),
+        None => String::new(),
+    };
+    let attachments = match load_attachments(files).await {
+        Ok(a) => a,
+        Err(code) => return code,
+    };
 
     let mut client = match ctx.client().await {
         Ok(c) => c,
@@ -577,7 +672,14 @@ pub async fn dc_send(
         Ok(id) => id,
         Err(code) => return code,
     };
-    match client.send_message(&channel_id, text, reply).await {
+    let result = if attachments.is_empty() {
+        client.send_message(&channel_id, &text, reply).await
+    } else {
+        client
+            .send_message_with_files(&channel_id, &text, reply, attachments)
+            .await
+    };
+    match result {
         Ok(id) => {
             let data = serde_json::json!({ "message_id": id, "channel_id": channel_id });
             let _ = output::emit(&data, ctx.format);
@@ -799,10 +901,22 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Send {
             channel,
             text,
+            file,
             reply,
             confirm,
             dry_run,
-        } => dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await,
+        } => {
+            dc_send(
+                ctx,
+                &channel,
+                text.as_deref(),
+                &file,
+                reply.as_deref(),
+                confirm,
+                dry_run,
+            )
+            .await
+        }
         DcCmd::Edit {
             channel,
             message_id,

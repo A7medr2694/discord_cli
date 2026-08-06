@@ -135,9 +135,12 @@ enum Command {
     Send {
         /// Channel name or ID.
         channel: String,
-        /// Message content.
+        /// Message content. "-" reads from stdin.
         #[arg(long)]
-        text: String,
+        text: Option<String>,
+        /// Attach a file (repeatable; max 10 per message).
+        #[arg(long)]
+        file: Vec<String>,
         /// Reply to a message id.
         #[arg(long)]
         reply: Option<String>,
@@ -373,10 +376,22 @@ async fn run() -> ExitCode {
         Some(Command::Send {
             channel,
             text,
+            file,
             reply,
             confirm,
             dry_run,
-        }) => commands::dc::dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await,
+        }) => {
+            commands::dc::dc_send(
+                ctx,
+                &channel,
+                text.as_deref(),
+                &file,
+                reply.as_deref(),
+                confirm,
+                dry_run,
+            )
+            .await
+        }
         Some(Command::Edit {
             channel,
             message_id,

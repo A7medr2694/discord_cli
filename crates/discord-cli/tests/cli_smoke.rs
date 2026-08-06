@@ -124,3 +124,47 @@ fn dm_group_create_requires_confirm() {
         "dm-group create must exit 2 without --confirm"
     );
 }
+
+#[test]
+fn send_requires_text_or_file() {
+    // No --text and no --file -> usage exit 2 (before any token/network).
+    let out = no_token_cmd().args(["send", "123456"]).output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "send with no text/file must exit 2"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("nothing to send"), "stderr: {stderr}");
+}
+
+#[test]
+fn send_rejects_too_many_files() {
+    // 11 files -> usage exit 2 (before token/network; paths need not exist).
+    let mut args = vec!["send", "123456", "--text", "hi", "--confirm"];
+    for i in 0..11 {
+        args.push("--file");
+        args.push(Box::leak(
+            format!("/tmp/nonexistent-{i}.png").into_boxed_str(),
+        ));
+    }
+    let out = no_token_cmd().args(&args).output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "send with >10 files must exit 2"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("too many files"), "stderr: {stderr}");
+}
+
+#[test]
+fn send_help_shows_file_flag() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["send", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--file"), "stdout: {stdout}");
+    assert!(stdout.contains("stdin"), "stdout: {stdout}");
+}

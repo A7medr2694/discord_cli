@@ -26,3 +26,4 @@ discord-auth = { path = "../discord-auth" }
 discord-db = { path = "../discord-db" }
 discord-mcp = { path = "../discord-mcp" }
 discord-user-rs.workspace = true
+mime_guess = "2"
