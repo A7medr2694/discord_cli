@@ -124,6 +124,22 @@ pub enum DcCmd {
         /// Channel name or ID.
         channel: String,
     },
+    /// Join a server via invite code or URL (requires --confirm).
+    Join {
+        /// Invite code or full URL (discord.gg/..., discord.com/invite/...).
+        invite: String,
+        /// Confirm joining (never interactive).
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Leave a server (requires --confirm).
+    Leave {
+        /// Guild name or ID.
+        guild: String,
+        /// Confirm leaving (never interactive).
+        #[arg(long)]
+        confirm: bool,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -739,6 +755,76 @@ pub async fn dc_typing(ctx: &DcCtx, channel: &str) -> ExitCode {
     }
 }
 
+/// `dc join <INVITE>` — preview then join a server via invite (needs --confirm).
+/// Reference: RickvanLoo menu.go invite preview + InviteAccept.
+pub async fn dc_join(ctx: &DcCtx, invite: &str, confirm: bool) -> ExitCode {
+    // Extract bare code from URL or plain (RickvanLoo lacks this; we improve).
+    let code = match ApiClient::extract_invite_code(invite) {
+        Some(c) => c.to_string(),
+        None => {
+            eprintln!("invalid invite: \"{invite}\"");
+            return ExitCode::from(exit::USAGE);
+        }
+    };
+    if !confirm {
+        eprintln!("This will join a server from invite \"{code}\". Add --confirm to proceed.");
+        return ExitCode::from(exit::USAGE);
+    }
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    // Preview first (guild name + member counts) for the human/agent.
+    let invite_info = client.get_invite(&code).await;
+    match invite_info {
+        Ok(info) => {
+            let guild_name = info
+                .guild
+                .as_ref()
+                .and_then(|g| g.name.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+            let members = info.approximate_member_count.unwrap_or(0);
+            if let Err(e) = client.accept_invite(&code).await {
+                return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR));
+            }
+            let data = serde_json::json!({
+                "joined": true,
+                "invite_code": code,
+                "guild_name": guild_name,
+                "approximate_member_count": members,
+            });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc leave <GUILD>` — leave a server (needs --confirm).
+/// Reference: RickvanLoo LeaveServerMenu → GuildLeave.
+pub async fn dc_leave(ctx: &DcCtx, guild: &str, confirm: bool) -> ExitCode {
+    if !confirm {
+        eprintln!("This will leave server \"{guild}\". Add --confirm to proceed.");
+        return ExitCode::from(exit::USAGE);
+    }
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guild_id = match resolve::resolve_guild(&mut client, guild).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.leave_guild(&guild_id).await {
+        Ok(()) => {
+            let data = serde_json::json!({ "left": true, "guild_id": guild_id });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// `dc edit <CHANNEL> <MSG_ID> --text ...`
 pub async fn dc_edit(ctx: &DcCtx, channel: &str, message_id: &str, text: &str) -> ExitCode {
     let mut client = match ctx.client().await {
@@ -972,6 +1058,8 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
             .await
         }
         DcCmd::Typing { channel } => dc_typing(ctx, &channel).await,
+        DcCmd::Join { invite, confirm } => dc_join(ctx, &invite, confirm).await,
+        DcCmd::Leave { guild, confirm } => dc_leave(ctx, &guild, confirm).await,
         DcCmd::Edit {
             channel,
             message_id,

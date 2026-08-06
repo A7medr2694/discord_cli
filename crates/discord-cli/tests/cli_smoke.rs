@@ -198,3 +198,42 @@ fn watch_help_shows_typing_flag() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("--typing"), "stdout: {stdout}");
 }
+
+#[test]
+fn join_requires_confirm() {
+    let out = no_token_cmd()
+        .args(["join", "https://discord.gg/abc123"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "join must exit 2 without --confirm"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--confirm"), "stderr: {stderr}");
+}
+
+#[test]
+fn join_invalid_invite_exits_2() {
+    let out = no_token_cmd()
+        .args(["join", "", "--confirm"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "empty invite must exit 2");
+}
+
+#[test]
+fn leave_requires_confirm() {
+    let out = no_token_cmd()
+        .args(["leave", "my-server"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "leave must exit 2 without --confirm"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--confirm"), "stderr: {stderr}");
+}

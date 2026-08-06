@@ -159,6 +159,22 @@ enum Command {
         /// Channel name or ID.
         channel: String,
     },
+    /// Join a server via invite code or URL (requires --confirm).
+    Join {
+        /// Invite code or full URL (discord.gg/..., discord.com/invite/...).
+        invite: String,
+        /// Confirm joining (never interactive).
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Leave a server (requires --confirm).
+    Leave {
+        /// Guild name or ID.
+        guild: String,
+        /// Confirm leaving (never interactive).
+        #[arg(long)]
+        confirm: bool,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -408,6 +424,12 @@ async fn run() -> ExitCode {
             .await
         }
         Some(Command::Typing { channel }) => commands::dc::dc_typing(ctx, &channel).await,
+        Some(Command::Join { invite, confirm }) => {
+            commands::dc::dc_join(ctx, &invite, confirm).await
+        }
+        Some(Command::Leave { guild, confirm }) => {
+            commands::dc::dc_leave(ctx, &guild, confirm).await
+        }
         Some(Command::Edit {
             channel,
             message_id,
