@@ -32,6 +32,7 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 dotenvy = "0.15"
 dirs = "5"
+schemars = "1"
 
 [workspace.dependencies.windows]
 version = "0.58"

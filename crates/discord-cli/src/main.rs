@@ -121,6 +121,8 @@ enum Command {
         #[arg(long)]
         paste: bool,
     },
+    /// Start the MCP server (stdio) for AI agents.
+    Serve,
 }
 
 fn main() -> ExitCode {
@@ -177,6 +179,7 @@ async fn run() -> ExitCode {
             commands::local::cmd_purge(&channel, yes, format)
         }
         Some(Command::Auth { save, paste }) => cmd_auth(save, paste, format).await,
+        Some(Command::Serve) => cmd_serve().await,
         None => {
             // No subcommand: print help.
             let mut c = Cli::command();
@@ -257,6 +260,14 @@ async fn cmd_auth(save: bool, paste: bool, format: Format) -> ExitCode {
         "found token(s) but none validated against Discord",
         exit::ERROR,
     ))
+}
+
+/// `serve` — start the MCP server over stdio.
+async fn cmd_serve() -> ExitCode {
+    match discord_mcp::server::serve_stdio().await {
+        Ok(_) => ExitCode::from(exit::OK),
+        Err(e) => ExitCode::from(output::emit_error("McpError", &e.to_string(), exit::ERROR)),
+    }
 }
 
 async fn cmd_whoami(cli: &Cli, format: Format) -> ExitCode {

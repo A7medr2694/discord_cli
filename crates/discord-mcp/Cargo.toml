@@ -16,3 +16,4 @@ thiserror.workspace = true
 tracing.workspace = true
 discord-core = { path = "../discord-core" }
 discord-db = { path = "../discord-db" }
+schemars = { workspace = true }
