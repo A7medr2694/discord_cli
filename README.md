@@ -206,8 +206,12 @@ discord watch --keyword "incident" --jsonl
 ```bash
 # macOS / Linux — one-liner (downloads prebuilt binary)
 curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash
-# ...with PATH auto-update + self-test
-curl -fsSL ".../install.sh" | bash -s -- --easy-mode --verify
+
+# With PATH auto-update + self-test
+curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash -s -- --easy-mode --verify
+
+# Pin a specific version
+curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash -s -- --version v0.1.0
 ```
 
 ```powershell
