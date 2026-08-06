@@ -29,10 +29,8 @@ pub fn browser_user_agent() -> String {
 /// 16-byte mask that clears Discord's client-mod detection bits from a UUIDv4
 /// (discordo `generateLaunchSignature`). Re-implemented in Rust.
 const LAUNCH_SIGNATURE_MASK: [u8; 16] = [
-    0b11111111, 0b01111111, 0b11101111, 0b11101111,
-    0b11110111, 0b11101111, 0b11110111, 0b11111111,
-    0b11011111, 0b01111110, 0b11111111, 0b10111111,
-    0b11111110, 0b11111111, 0b11110111, 0b11111111,
+    0b11111111, 0b01111111, 0b11101111, 0b11101111, 0b11110111, 0b11101111, 0b11110111, 0b11111111,
+    0b11011111, 0b01111110, 0b11111111, 0b10111111, 0b11111110, 0b11111111, 0b11110111, 0b11111111,
 ];
 
 /// Generate a `launch_signature` UUID: UUIDv4 then AND each byte with the mask.
@@ -75,7 +73,14 @@ async fn fetch_build_number() -> Option<u32> {
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .ok()?;
-    let html = client.get("https://discord.com/login").send().await.ok()?.text().await.ok()?;
+    let html = client
+        .get("https://discord.com/login")
+        .send()
+        .await
+        .ok()?
+        .text()
+        .await
+        .ok()?;
     let marker = "\"BUILD_NUMBER\":\"";
     let start = html.find(marker)? + marker.len();
     let end = html[start..].find('"')? + start;
@@ -173,7 +178,10 @@ mod tests {
     #[test]
     fn identify_props_excludes_super_only_fields() {
         let p = identify_properties();
-        assert!(p.get("launch_signature").is_none(), "launch_signature must NOT be in identify");
+        assert!(
+            p.get("launch_signature").is_none(),
+            "launch_signature must NOT be in identify"
+        );
         assert!(p.get("client_app_state").is_none());
         assert_eq!(p["is_fast_connect"], true);
         assert_eq!(p["has_client_mods"], false);

@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use clap::Subcommand;
 use discord_core::client::ApiClient;
-use discord_core::output::{self, Format, exit};
+use discord_core::output::{self, exit, Format};
 
 use crate::resolve;
 
@@ -256,9 +256,11 @@ impl DcCtx {
     pub async fn client(&self) -> Result<ApiClient, ExitCode> {
         match ApiClient::from_env(self.token.as_deref()) {
             Ok(c) => Ok(c),
-            Err(e) => {
-                Err(ExitCode::from(output::emit_error("AuthError", &e.to_string(), exit::ERROR)))
-            }
+            Err(e) => Err(ExitCode::from(output::emit_error(
+                "AuthError",
+                &e.to_string(),
+                exit::ERROR,
+            ))),
         }
     }
 }
@@ -314,17 +316,18 @@ pub async fn dc_dms(ctx: &DcCtx) -> ExitCode {
 
 /// Resolve a channel name to a channel ID (numeric ID passes through;
 /// otherwise search across the user's guilds). Used by read/history.
-async fn resolve_channel_id(
-    client: &mut ApiClient,
-    channel: &str,
-) -> Result<String, ExitCode> {
+async fn resolve_channel_id(client: &mut ApiClient, channel: &str) -> Result<String, ExitCode> {
     if channel.chars().all(|c| c.is_ascii_digit()) {
         return Ok(channel.to_string());
     }
     let guilds = match client.list_guilds().await {
         Ok(g) => g,
         Err(e) => {
-            return Err(ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)))
+            return Err(ExitCode::from(output::emit_error(
+                "ApiError",
+                &e.to_string(),
+                exit::ERROR,
+            )))
         }
     };
     for g in &guilds {
@@ -361,7 +364,10 @@ pub async fn dc_history(
         Err(code) => return code,
     };
 
-    match client.fetch_messages(&channel_id, limit, before, after).await {
+    match client
+        .fetch_messages(&channel_id, limit, before, after)
+        .await
+    {
         Ok(msgs) => {
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
@@ -371,12 +377,7 @@ pub async fn dc_history(
 }
 
 /// `dc read <CHANNEL>` — recent messages (default 50), AI-facing.
-pub async fn dc_read(
-    ctx: &DcCtx,
-    channel: &str,
-    limit: usize,
-    before: Option<u64>,
-) -> ExitCode {
+pub async fn dc_read(ctx: &DcCtx, channel: &str, limit: usize, before: Option<u64>) -> ExitCode {
     let mut client = match ctx.client().await {
         Ok(c) => c,
         Err(code) => return code,
@@ -386,7 +387,10 @@ pub async fn dc_read(
         Err(code) => return code,
     };
 
-    match client.fetch_messages(&channel_id, limit, before, None).await {
+    match client
+        .fetch_messages(&channel_id, limit, before, None)
+        .await
+    {
         Ok(msgs) => {
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
@@ -449,7 +453,10 @@ pub async fn dc_search(
         Ok(id) => id,
         Err(code) => return code,
     };
-    match client.search_guild_messages(&guild_id, query, channel, limit).await {
+    match client
+        .search_guild_messages(&guild_id, query, channel, limit)
+        .await
+    {
         Ok(msgs) => {
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
@@ -730,7 +737,9 @@ pub async fn dc_sync_all(ctx: &DcCtx, limit: usize) -> ExitCode {
     };
     let guilds = match client.list_guilds().await {
         Ok(g) => g,
-        Err(e) => return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+        }
     };
     let mut total = 0usize;
     let mut channels_synced = 0usize;
@@ -758,42 +767,66 @@ pub async fn dc_sync_all(ctx: &DcCtx, limit: usize) -> ExitCode {
 }
 
 /// Dispatch a `dc` subcommand.
+#[allow(dead_code)] // kept for potential reuse; top-level dispatch lives in main.rs
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
         DcCmd::Guilds => dc_guilds(ctx).await,
         DcCmd::Channels { guild } => dc_channels(ctx, &guild).await,
         DcCmd::Dms => dc_dms(ctx).await,
-        DcCmd::History { channel, limit, before, after } => {
-            dc_history(ctx, &channel, limit, before, after).await
-        }
-        DcCmd::Read { channel, limit, before } => {
-            dc_read(ctx, &channel, limit, before).await
-        }
+        DcCmd::History {
+            channel,
+            limit,
+            before,
+            after,
+        } => dc_history(ctx, &channel, limit, before, after).await,
+        DcCmd::Read {
+            channel,
+            limit,
+            before,
+        } => dc_read(ctx, &channel, limit, before).await,
         DcCmd::Members { guild, max } => dc_members(ctx, &guild, max).await,
         DcCmd::Info { guild } => dc_info(ctx, &guild).await,
-        DcCmd::Search { guild, query, channel, limit } => {
-            dc_search(ctx, &guild, &query, channel.as_deref(), limit).await
-        }
+        DcCmd::Search {
+            guild,
+            query,
+            channel,
+            limit,
+        } => dc_search(ctx, &guild, &query, channel.as_deref(), limit).await,
         DcCmd::Roles { guild } => dc_roles(ctx, &guild).await,
         DcCmd::Profile { user_id } => dc_profile(ctx, user_id.as_deref()).await,
         DcCmd::Relationships => dc_relationships(ctx).await,
         DcCmd::Threads { channel } => dc_threads(ctx, &channel).await,
-        DcCmd::Send { channel, text, reply, confirm, dry_run } => {
-            dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await
-        }
-        DcCmd::Edit { channel, message_id, text } => {
-            dc_edit(ctx, &channel, &message_id, &text).await
-        }
-        DcCmd::Delete { channel, message_id, confirm } => {
-            dc_delete(ctx, &channel, &message_id, confirm).await
-        }
-        DcCmd::React { channel, message_id, emoji } => {
-            dc_react(ctx, &channel, &message_id, &emoji).await
-        }
-        DcCmd::Unreact { channel, message_id, emoji } => {
-            dc_unreact(ctx, &channel, &message_id, &emoji).await
-        }
-        DcCmd::Pin { channel, message_id } => dc_pin(ctx, &channel, &message_id).await,
+        DcCmd::Send {
+            channel,
+            text,
+            reply,
+            confirm,
+            dry_run,
+        } => dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await,
+        DcCmd::Edit {
+            channel,
+            message_id,
+            text,
+        } => dc_edit(ctx, &channel, &message_id, &text).await,
+        DcCmd::Delete {
+            channel,
+            message_id,
+            confirm,
+        } => dc_delete(ctx, &channel, &message_id, confirm).await,
+        DcCmd::React {
+            channel,
+            message_id,
+            emoji,
+        } => dc_react(ctx, &channel, &message_id, &emoji).await,
+        DcCmd::Unreact {
+            channel,
+            message_id,
+            emoji,
+        } => dc_unreact(ctx, &channel, &message_id, &emoji).await,
+        DcCmd::Pin {
+            channel,
+            message_id,
+        } => dc_pin(ctx, &channel, &message_id).await,
         DcCmd::Pins { channel } => dc_pins(ctx, &channel).await,
         DcCmd::Sync { channel, limit } => dc_sync(ctx, &channel, limit).await,
         DcCmd::SyncAll { limit } => dc_sync_all(ctx, limit).await,
@@ -832,7 +865,8 @@ pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
             let ids: Vec<String> = users.split(',').map(|s| s.trim().to_string()).collect();
             match client.create_group_dm(&ids).await {
                 Ok(channel_id) => {
-                    let _ = output::emit(&serde_json::json!({ "channel_id": channel_id }), ctx.format);
+                    let _ =
+                        output::emit(&serde_json::json!({ "channel_id": channel_id }), ctx.format);
                     ExitCode::from(exit::OK)
                 }
                 Err(e) => {
@@ -842,14 +876,21 @@ pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
         }
         DmGroupCmd::Add { channel, user } => match client.group_dm_add(&channel, &user).await {
             Ok(_) => {
-                let _ = output::emit(&serde_json::json!({ "added": user, "channel": channel }), ctx.format);
+                let _ = output::emit(
+                    &serde_json::json!({ "added": user, "channel": channel }),
+                    ctx.format,
+                );
                 ExitCode::from(exit::OK)
             }
             Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
         },
-        DmGroupCmd::Remove { channel, user } => match client.group_dm_remove(&channel, &user).await {
+        DmGroupCmd::Remove { channel, user } => match client.group_dm_remove(&channel, &user).await
+        {
             Ok(_) => {
-                let _ = output::emit(&serde_json::json!({ "removed": user, "channel": channel }), ctx.format);
+                let _ = output::emit(
+                    &serde_json::json!({ "removed": user, "channel": channel }),
+                    ctx.format,
+                );
                 ExitCode::from(exit::OK)
             }
             Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),

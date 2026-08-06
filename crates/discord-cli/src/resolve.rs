@@ -16,11 +16,10 @@ use discord_core::types::Channel;
 /// Resolve a guild name or ID to a guild ID.
 /// Errors (exit 3) if not found.
 pub async fn resolve_guild(client: &mut ApiClient, name: &str) -> Result<String, ExitCode> {
-    if let Some(id) = client
-        .resolve_guild_id(name)
-        .await
-        .map_err(|e| { eprintln!("error: {e}"); ExitCode::from(exit::ERROR) })?
-    {
+    if let Some(id) = client.resolve_guild_id(name).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })? {
         return Ok(id);
     }
     eprintln!("Guild \"{name}\" not found. Use `discord dc guilds` to list.");
@@ -30,15 +29,16 @@ pub async fn resolve_guild(client: &mut ApiClient, name: &str) -> Result<String,
 /// Resolve a channel name or ID within a guild to a Channel.
 /// ID match first; else strip `#`, case-insensitive exact match.
 /// Ambiguity → stderr list + exit 1; not found → exit 3 (discli).
+#[allow(dead_code)] // used by tests; read/history resolve channels directly in dc.rs
 pub async fn resolve_channel(
     client: &mut ApiClient,
     guild_id: &str,
     name: &str,
 ) -> Result<Channel, ExitCode> {
-    let channels = client
-        .list_channels(guild_id)
-        .await
-        .map_err(|e| { eprintln!("error: {e}"); ExitCode::from(exit::ERROR) })?;
+    let channels = client.list_channels(guild_id).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
 
     // ID match first.
     if let Some(c) = channels.iter().find(|c| c.id == name) {
@@ -60,7 +60,10 @@ pub async fn resolve_channel(
                 .iter()
                 .map(|m| format!("#{} (type {})", m.name, m.channel_type))
                 .collect();
-            eprintln!("Ambiguous channel \"{clean}\". Matches: {}", names.join(", "));
+            eprintln!(
+                "Ambiguous channel \"{clean}\". Matches: {}",
+                names.join(", ")
+            );
             Err(ExitCode::from(exit::USAGE))
         }
         _ => {
@@ -72,7 +75,6 @@ pub async fn resolve_channel(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use discord_core::types::Channel;
 
     fn ch(id: &str, name: &str, channel_type: u8) -> Channel {
@@ -101,7 +103,7 @@ mod tests {
 
     #[test]
     fn exact_case_insensitive_match() {
-        let channels = vec![ch("1", "General", 0), ch("2", "announcements", 5)];
+        let channels = [ch("1", "General", 0), ch("2", "announcements", 5)];
         let needle = "general";
         let matches: Vec<&Channel> = channels
             .iter()
@@ -113,7 +115,7 @@ mod tests {
 
     #[test]
     fn ambiguity_detects_multiple() {
-        let channels = vec![ch("1", "general", 0), ch("2", "General", 2)];
+        let channels = [ch("1", "general", 0), ch("2", "General", 2)];
         let needle = "general";
         let matches: Vec<&Channel> = channels
             .iter()

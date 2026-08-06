@@ -4,12 +4,11 @@
 //! Uses rmcp's `#[tool_router]` + `#[tool]` macros (official pattern).
 
 use rmcp::{
-    ServerHandler, ServiceExt,
     handler::server::router::tool::ToolRouter,
     handler::server::wrapper::Parameters,
     model::{ServerCapabilities, ServerInfo},
     schemars::JsonSchema,
-    tool, tool_handler, tool_router,
+    tool, tool_handler, tool_router, ServerHandler, ServiceExt,
 };
 use serde::{Deserialize, Serialize};
 
@@ -125,9 +124,15 @@ impl DiscordMcpServer {
 
     /// List text channels of a guild.
     #[tool(description = "List text/announcement/forum channels of a guild.")]
-    pub async fn list_channels(&self, Parameters(req): Parameters<GuildParams>) -> Result<String, String> {
+    pub async fn list_channels(
+        &self,
+        Parameters(req): Parameters<GuildParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
-        let channels = c.list_channels(&req.guild_id).await.map_err(|e| e.to_string())?;
+        let channels = c
+            .list_channels(&req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&channels).unwrap_or_else(|_| "[]".into()))
     }
 
@@ -141,7 +146,10 @@ impl DiscordMcpServer {
 
     /// Read recent messages from a channel.
     #[tool(description = "Read recent messages from a channel (agent-friendly JSON).")]
-    pub async fn read_messages(&self, Parameters(req): Parameters<ReadParams>) -> Result<String, String> {
+    pub async fn read_messages(
+        &self,
+        Parameters(req): Parameters<ReadParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
         let limit = req.limit.unwrap_or(50) as usize;
         let before = req.before.as_deref().and_then(|s| s.parse().ok());
@@ -154,7 +162,10 @@ impl DiscordMcpServer {
 
     /// Send a message to a channel.
     #[tool(description = "Send a message to a channel. Gate behind approval in client.")]
-    pub async fn send_message(&self, Parameters(req): Parameters<SendParams>) -> Result<String, String> {
+    pub async fn send_message(
+        &self,
+        Parameters(req): Parameters<SendParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
         let id = c
             .send_message(&req.channel_id, &req.content, req.reply_to.as_deref())
@@ -165,7 +176,10 @@ impl DiscordMcpServer {
 
     /// Search messages in a guild.
     #[tool(description = "Native Discord search within a guild.")]
-    pub async fn search_messages(&self, Parameters(req): Parameters<SearchParams>) -> Result<String, String> {
+    pub async fn search_messages(
+        &self,
+        Parameters(req): Parameters<SearchParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
         let limit = req.limit.unwrap_or(25);
         let msgs = c
@@ -190,7 +204,10 @@ impl DiscordMcpServer {
 
     /// Get a single message by channel + message ID.
     #[tool(description = "Fetch a single message by channel_id and message_id.")]
-    pub async fn get_message(&self, Parameters(req): Parameters<GetMessageParams>) -> Result<String, String> {
+    pub async fn get_message(
+        &self,
+        Parameters(req): Parameters<GetMessageParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
         let msg = c
             .get_message(&req.channel_id, &req.message_id)
@@ -201,7 +218,10 @@ impl DiscordMcpServer {
 
     /// List guild members.
     #[tool(description = "List members of a guild.")]
-    pub async fn list_members(&self, Parameters(req): Parameters<MembersParams>) -> Result<String, String> {
+    pub async fn list_members(
+        &self,
+        Parameters(req): Parameters<MembersParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
         let members = c
             .list_members(&req.guild_id, req.limit.unwrap_or(50))
@@ -212,15 +232,24 @@ impl DiscordMcpServer {
 
     /// List threads in a channel (user-token fallback).
     #[tool(description = "List active threads in a channel (handles user-token fallback).")]
-    pub async fn list_threads(&self, Parameters(req): Parameters<ThreadsParams>) -> Result<String, String> {
+    pub async fn list_threads(
+        &self,
+        Parameters(req): Parameters<ThreadsParams>,
+    ) -> Result<String, String> {
         let mut c = self.client()?;
-        let threads = c.list_threads(&req.channel_id).await.map_err(|e| e.to_string())?;
+        let threads = c
+            .list_threads(&req.channel_id)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&threads).unwrap_or_else(|_| "[]".into()))
     }
 
     /// Get local archive sync status.
     #[tool(description = "Get per-channel sync status of the local SQLite archive.")]
-    pub async fn get_sync_status(&self, _params: Parameters<EmptyParams>) -> Result<String, String> {
+    pub async fn get_sync_status(
+        &self,
+        _params: Parameters<EmptyParams>,
+    ) -> Result<String, String> {
         // Best-effort: report whether a local DB exists.
         let db_path = discord_core::config::db_path().map_err(|e| e.to_string())?;
         let exists = db_path.exists();
@@ -228,7 +257,8 @@ impl DiscordMcpServer {
             "db_path": db_path.to_string_lossy(),
             "db_exists": exists,
             "note": "run `discord dc sync-all` to populate the archive"
-        }).to_string())
+        })
+        .to_string())
     }
 }
 
@@ -245,7 +275,9 @@ impl ServerHandler for DiscordMcpServer {
 
 /// Run the server over stdio (called by the `serve` subcommand).
 pub async fn serve_stdio() -> anyhow::Result<()> {
-    let server = DiscordMcpServer::new().serve(rmcp::transport::stdio()).await?;
+    let server = DiscordMcpServer::new()
+        .serve(rmcp::transport::stdio())
+        .await?;
     server.waiting().await?;
     Ok(())
 }

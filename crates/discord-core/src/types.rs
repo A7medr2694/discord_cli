@@ -184,9 +184,33 @@ mod tests {
 
     #[test]
     fn channel_text_like() {
-        let text = Channel { id: "1".into(), name: "g".into(), guild_id: None, channel_type: 0, topic: None, parent_id: None, position: None };
-        let forum = Channel { id: "2".into(), name: "f".into(), guild_id: None, channel_type: 15, topic: None, parent_id: None, position: None };
-        let voice = Channel { id: "3".into(), name: "v".into(), guild_id: None, channel_type: 2, topic: None, parent_id: None, position: None };
+        let text = Channel {
+            id: "1".into(),
+            name: "g".into(),
+            guild_id: None,
+            channel_type: 0,
+            topic: None,
+            parent_id: None,
+            position: None,
+        };
+        let forum = Channel {
+            id: "2".into(),
+            name: "f".into(),
+            guild_id: None,
+            channel_type: 15,
+            topic: None,
+            parent_id: None,
+            position: None,
+        };
+        let voice = Channel {
+            id: "3".into(),
+            name: "v".into(),
+            guild_id: None,
+            channel_type: 2,
+            topic: None,
+            parent_id: None,
+            position: None,
+        };
         assert!(text.is_text_like());
         assert!(forum.is_text_like());
         assert!(!voice.is_text_like());

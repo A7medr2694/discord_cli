@@ -4,18 +4,22 @@
 use std::process::ExitCode;
 
 use discord_core::config;
-use discord_core::output::{self, Format, exit};
+use discord_core::output::{self, exit, Format};
 use discord_db::db as ddb;
 
 /// `search <KEYWORD>` — FTS5 search of local archive.
 pub fn cmd_search(query: &str, channel: Option<&str>, limit: usize, format: Format) -> ExitCode {
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     // Basic per-channel filter is applied post-hoc (query is FTS5-native).
     match ddb::search_messages(&conn, query, limit as i64) {
@@ -39,11 +43,15 @@ pub fn cmd_recent(
 ) -> ExitCode {
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     match ddb::recent_messages(&conn, channel, hours, limit as i64) {
         Ok(hits) => {
@@ -58,11 +66,15 @@ pub fn cmd_recent(
 pub fn cmd_stats(format: Format) -> ExitCode {
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     match ddb::channel_stats(&conn) {
         Ok(stats) => {
@@ -74,19 +86,18 @@ pub fn cmd_stats(format: Format) -> ExitCode {
 }
 
 /// `export <CHANNEL> [-f text|json] [-o FILE]` — export stored messages.
-pub fn cmd_export(
-    channel: &str,
-    as_json: bool,
-    output: Option<&str>,
-    format: Format,
-) -> ExitCode {
+pub fn cmd_export(channel: &str, as_json: bool, output: Option<&str>, format: Format) -> ExitCode {
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let channel_id = channel.to_string();
     match ddb::channel_messages(&conn, &channel_id, 1_000_000) {
@@ -127,15 +138,20 @@ pub fn cmd_purge(channel: &str, yes: bool, format: Format) -> ExitCode {
     }
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     match ddb::purge_channel(&conn, channel) {
         Ok(n) => {
-            let data = serde_json::json!({ "purged": true, "channel": channel, "messages_deleted": n });
+            let data =
+                serde_json::json!({ "purged": true, "channel": channel, "messages_deleted": n });
             let _ = output::emit(&data, format);
             ExitCode::from(exit::OK)
         }
@@ -147,11 +163,15 @@ pub fn cmd_purge(channel: &str, yes: bool, format: Format) -> ExitCode {
 pub fn cmd_top(channel: Option<&str>, limit: usize, format: Format) -> ExitCode {
     let db_path = match config::db_path() {
         Ok(p) => p,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
         Ok(c) => c,
-        Err(e) => return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
+        }
     };
     match ddb::top_senders(&conn, channel, limit as i64) {
         Ok(senders) => {

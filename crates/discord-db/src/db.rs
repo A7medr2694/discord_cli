@@ -4,7 +4,7 @@
 //! `db.py` (Apache-2.0). Verified in plan §6.
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 /// Open the database at `path`, apply schema, return the connection.
 /// WAL + foreign_keys; single-writer semantics.
@@ -71,10 +71,7 @@ fn migrate(conn: &Connection) -> Result<()> {
 }
 
 /// Upsert a message (INSERT OR REPLACE). Returns whether a new row was inserted.
-pub fn upsert_message(
-    conn: &Connection,
-    msg: &crate::MessageRow,
-) -> Result<bool> {
+pub fn upsert_message(conn: &Connection, msg: &crate::MessageRow) -> Result<bool> {
     let changed = conn
         .execute(
             r#"
@@ -131,7 +128,9 @@ pub fn get_sync_state(conn: &Connection, channel_id: &str) -> Result<(String, St
     let mut stmt = conn
         .prepare("SELECT COALESCE(last_message_id,''), COALESCE(oldest_message_id,'') FROM sync_state WHERE channel_id = ?1")
         .context("prepare sync_state")?;
-    let mut rows = stmt.query(params![channel_id]).context("query sync_state")?;
+    let mut rows = stmt
+        .query(params![channel_id])
+        .context("query sync_state")?;
     if let Some(row) = rows.next().context("next sync_state")? {
         let last: String = row.get(0)?;
         let oldest: String = row.get(1)?;
@@ -241,7 +240,11 @@ pub fn channel_stats(conn: &Connection) -> Result<Vec<crate::ChannelStat>> {
 }
 
 /// Top senders in a channel (or globally).
-pub fn top_senders(conn: &Connection, channel_name: Option<&str>, limit: i64) -> Result<Vec<crate::TopSender>> {
+pub fn top_senders(
+    conn: &Connection,
+    channel_name: Option<&str>,
+    limit: i64,
+) -> Result<Vec<crate::TopSender>> {
     let mut sql = String::from(
         r#"
         SELECT author_name, COUNT(*) AS cnt
@@ -304,7 +307,10 @@ pub fn channel_messages(
 /// Delete all stored messages for a channel. Returns rows deleted.
 pub fn purge_channel(conn: &Connection, channel_id: &str) -> Result<usize> {
     let n = conn
-        .execute("DELETE FROM messages WHERE channel_id = ?1", params![channel_id])
+        .execute(
+            "DELETE FROM messages WHERE channel_id = ?1",
+            params![channel_id],
+        )
         .context("purge channel")?;
     Ok(n)
 }
@@ -373,8 +379,17 @@ mod tests {
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
-        for t in ["messages", "channels", "guilds", "sync_state", "messages_fts"] {
-            assert!(tables.contains(&t.to_string()), "missing table {t}: {tables:?}");
+        for t in [
+            "messages",
+            "channels",
+            "guilds",
+            "sync_state",
+            "messages_fts",
+        ] {
+            assert!(
+                tables.contains(&t.to_string()),
+                "missing table {t}: {tables:?}"
+            );
         }
     }
 

@@ -1,7 +1,5 @@
 //! discord-db: SQLite archive for Discord messages.
 
-use serde::Serialize;
-
 pub mod db;
 
 /// A row in the `messages` table.

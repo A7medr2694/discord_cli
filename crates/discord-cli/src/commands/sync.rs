@@ -11,11 +11,7 @@ use discord_db::db as ddb;
 use discord_db::MessageRow;
 
 /// Sync one channel into SQLite. Returns message count written.
-pub async fn sync_channel(
-    client: &mut ApiClient,
-    channel_id: &str,
-    limit: usize,
-) -> Result<usize> {
+pub async fn sync_channel(client: &mut ApiClient, channel_id: &str, limit: usize) -> Result<usize> {
     let db_path = config::db_path()?;
     let conn = ddb::open(db_path.to_str().unwrap_or("discord.db"))?;
 
@@ -27,8 +23,14 @@ pub async fn sync_channel(
     let mut total = 0usize;
 
     // Phase B (history backward) — always runs to backfill.
-    let before = if oldest_id.is_empty() { None } else { oldest_id.parse().ok() };
-    let msgs = client.fetch_messages(channel_id, limit, before, None).await?;
+    let before = if oldest_id.is_empty() {
+        None
+    } else {
+        oldest_id.parse().ok()
+    };
+    let msgs = client
+        .fetch_messages(channel_id, limit, before, None)
+        .await?;
     for m in &msgs {
         ddb::upsert_message(&conn, &row_from_msg(m, channel_id))?;
     }
@@ -37,7 +39,9 @@ pub async fn sync_channel(
     // Phase A (new, forward) — only when we have a last cursor.
     if !last_id.is_empty() {
         let after: Option<u64> = last_id.parse().ok();
-        let new_msgs = client.fetch_messages(channel_id, limit, None, after).await?;
+        let new_msgs = client
+            .fetch_messages(channel_id, limit, None, after)
+            .await?;
         for m in &new_msgs {
             ddb::upsert_message(&conn, &row_from_msg(m, channel_id))?;
         }

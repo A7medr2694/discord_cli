@@ -13,6 +13,8 @@ const TOKEN_REGEX: &str = r#"[\w-]{24,}\.[\w-]{6}\.[\w-]{27,}|mfa\.[\w-]{84}"#;
 /// LevelDB dirs to scan per-OS (jackwener `_get_search_paths`).
 fn search_paths() -> Vec<(String, PathBuf)> {
     let mut out = Vec::new();
+    // Used by macOS/Linux search paths.
+    #[allow(unused_variables)]
     let home = dirs::home_dir().unwrap_or_default();
 
     #[cfg(windows)]
@@ -145,7 +147,7 @@ pub fn save_token_to_env(token: &str, env_path: Option<&PathBuf>) -> Result<()> 
 /// Validate a token against `GET /users/@me` via discord-core.
 pub async fn validate_token(token: &str) -> Result<bool> {
     let mut client = discord_core::client::ApiClient::with_token(token);
-    Ok(client.validate().await?)
+    client.validate().await
 }
 
 /// Manual paste flow (M5.2): prompt for token, validate, save.
@@ -154,7 +156,9 @@ pub async fn auth_paste(save: bool) -> Result<String> {
     print!("Paste Discord token: ");
     std::io::stdout().flush().ok();
     let mut token = String::new();
-    std::io::stdin().read_line(&mut token).context("read token")?;
+    std::io::stdin()
+        .read_line(&mut token)
+        .context("read token")?;
     let token = token.trim().to_string();
     if token.is_empty() {
         return Err(anyhow!("empty token"));
@@ -198,7 +202,13 @@ mod tests {
         save_token_to_env("tok1", Some(&path)).unwrap();
         save_token_to_env("tok2", Some(&path)).unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(content.lines().filter(|l| l.starts_with("DISCORD_TOKEN=")).count(), 1);
+        assert_eq!(
+            content
+                .lines()
+                .filter(|l| l.starts_with("DISCORD_TOKEN="))
+                .count(),
+            1
+        );
         assert!(content.contains("DISCORD_TOKEN=tok2"));
         let _ = std::fs::remove_file(&path);
     }

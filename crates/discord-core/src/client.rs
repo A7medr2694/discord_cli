@@ -1,8 +1,8 @@
 //! Client wrapper over `discord-user-rs`'s `DiscordHttpClient`.
 //!
 //! Provides browser headers + X-Super-Properties (via `set_super_properties_b64`)
-//! + rate-limit handling. Full stealth header set lands in M8; the core here is
-//! the thin typed layer commands call.
+//! plus rate-limit handling. Full stealth header set lands in M8; the core here
+//! is the thin typed layer commands call.
 //!
 //! `discord-user-rs` is the MIT core crate (plan §2.2).
 
@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use discord_user::client::DiscordHttpClient;
 use discord_user::route::Route;
 
-use crate::config::{API_BASE, resolve_token};
+use crate::config::{resolve_token, API_BASE};
 use crate::types::{Channel, DmChannel, Guild, GuildInfo, Me, Member};
 
 /// Authenticated API client backed by `discord-user-rs`.
@@ -51,7 +51,10 @@ impl ApiClient {
     /// `GET /users/@me` — current user.
     pub async fn get_me(&mut self) -> Result<Me> {
         let inner = self.inner()?;
-        inner.get(Route::GetMe).await.context("GET /users/@me failed")
+        inner
+            .get(Route::GetMe)
+            .await
+            .context("GET /users/@me failed")
     }
 
     /// Validate token: `GET /users/@me` returns 200.
@@ -66,13 +69,10 @@ impl ApiClient {
     /// Response is a raw array; we deserialize to our `Guild` shape.
     pub async fn list_guilds(&mut self) -> Result<Vec<Guild>> {
         let inner = self.inner()?;
-        let raw: Vec<RawGuild> = inner
-            .get(Route::GetCurrentUserGuilds)
-            .await
-            .map_err(|e| {
-                // Surface the inner error chain (Debug) for troubleshooting.
-                anyhow::anyhow!("GET /users/@me/guilds failed: {:?}", e)
-            })?;
+        let raw: Vec<RawGuild> = inner.get(Route::GetCurrentUserGuilds).await.map_err(|e| {
+            // Surface the inner error chain (Debug) for troubleshooting.
+            anyhow::anyhow!("GET /users/@me/guilds failed: {:?}", e)
+        })?;
         Ok(raw
             .into_iter()
             .map(|g| Guild {
@@ -128,7 +128,10 @@ impl ApiClient {
     /// `Route::CreateDm` maps to that path (POST creates; GET lists).
     pub async fn list_dms(&mut self) -> Result<Vec<DmChannel>> {
         let inner = self.inner()?;
-        let raw: Vec<RawDm> = inner.get(Route::CreateDm).await.context("GET /users/@me/channels failed")?;
+        let raw: Vec<RawDm> = inner
+            .get(Route::CreateDm)
+            .await
+            .context("GET /users/@me/channels failed")?;
         let mut dms: Vec<DmChannel> = raw
             .into_iter()
             .map(|d| {
@@ -161,7 +164,10 @@ impl ApiClient {
         let gid: u64 = guild_id.parse().context("invalid guild id")?;
         let inner = self.inner()?;
         let raw: Vec<RawMember> = inner
-            .get(Route::GetGuildMembers { guild_id: gid, limit: limit.min(1000) })
+            .get(Route::GetGuildMembers {
+                guild_id: gid,
+                limit: limit.min(1000),
+            })
             .await
             .context("GET /guilds/{id}/members failed")?;
         Ok(raw
@@ -182,7 +188,10 @@ impl ApiClient {
         let gid: u64 = guild_id.parse().context("invalid guild id")?;
         let inner = self.inner()?;
         let raw: RawGuildInfo = inner
-            .get(Route::GetGuild { guild_id: gid, with_counts: true })
+            .get(Route::GetGuild {
+                guild_id: gid,
+                with_counts: true,
+            })
             .await
             .context("GET /guilds/{id} failed")?;
         Ok(GuildInfo {
@@ -261,7 +270,10 @@ impl ApiClient {
     /// `GET /users/@me/relationships` — friends/blocked/pending.
     pub async fn relationships(&mut self) -> Result<Vec<crate::types::Relationship>> {
         let inner = self.inner()?;
-        let raw: Vec<RawRelationship> = inner.get(Route::GetRelationships).await.context("GET relationships failed")?;
+        let raw: Vec<RawRelationship> = inner
+            .get(Route::GetRelationships)
+            .await
+            .context("GET relationships failed")?;
         Ok(raw
             .into_iter()
             .map(|r| crate::types::Relationship {
@@ -277,7 +289,10 @@ impl ApiClient {
         let uid: u64 = user_id.parse().context("invalid user id")?;
         let inner = self.inner()?;
         let raw: RawUserProfile = inner
-            .get(Route::GetUserProfile { user_id: uid, guild_id: None })
+            .get(Route::GetUserProfile {
+                user_id: uid,
+                guild_id: None,
+            })
             .await
             .context("GET /users/{id}/profile failed")?;
         Ok(crate::types::UserProfile {
@@ -365,17 +380,27 @@ impl ApiClient {
     }
 
     /// `PATCH /channels/{id}/messages/{mid}` — edit own message (M3.2).
-    pub async fn edit_message(&mut self, channel_id: &str, message_id: &str, content: &str) -> Result<()> {
+    pub async fn edit_message(
+        &mut self,
+        channel_id: &str,
+        message_id: &str,
+        content: &str,
+    ) -> Result<()> {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         let req = discord_user::types::EditMessageRequest {
             content: Some(content),
             flags: None,
-            ..Default::default()
         };
         inner
-            .patch::<serde_json::Value, _>(Route::EditMessage { channel_id: cid, message_id: mid }, req)
+            .patch::<serde_json::Value, _>(
+                Route::EditMessage {
+                    channel_id: cid,
+                    message_id: mid,
+                },
+                req,
+            )
             .await
             .context("PATCH message failed")?;
         Ok(())
@@ -387,31 +412,55 @@ impl ApiClient {
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         inner
-            .delete(Route::DeleteMessage { channel_id: cid, message_id: mid })
+            .delete(Route::DeleteMessage {
+                channel_id: cid,
+                message_id: mid,
+            })
             .await
             .context("DELETE message failed")?;
         Ok(())
     }
 
     /// `PUT /channels/{id}/messages/{mid}/reactions/{emoji}/@me` — react.
-    pub async fn add_reaction(&mut self, channel_id: &str, message_id: &str, emoji: &str) -> Result<()> {
+    pub async fn add_reaction(
+        &mut self,
+        channel_id: &str,
+        message_id: &str,
+        emoji: &str,
+    ) -> Result<()> {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         inner
-            .put::<serde_json::Value, ()>(Route::AddReaction { channel_id: cid, message_id: mid, emoji }, ())
+            .put::<serde_json::Value, ()>(
+                Route::AddReaction {
+                    channel_id: cid,
+                    message_id: mid,
+                    emoji,
+                },
+                (),
+            )
             .await
             .context("react failed")?;
         Ok(())
     }
 
     /// `DELETE .../reactions/{emoji}/@me` — remove own reaction.
-    pub async fn remove_reaction(&mut self, channel_id: &str, message_id: &str, emoji: &str) -> Result<()> {
+    pub async fn remove_reaction(
+        &mut self,
+        channel_id: &str,
+        message_id: &str,
+        emoji: &str,
+    ) -> Result<()> {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         inner
-            .delete(Route::RemoveOwnReaction { channel_id: cid, message_id: mid, emoji })
+            .delete(Route::RemoveOwnReaction {
+                channel_id: cid,
+                message_id: mid,
+                emoji,
+            })
             .await
             .context("unreact failed")?;
         Ok(())
@@ -423,7 +472,13 @@ impl ApiClient {
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         inner
-            .put::<serde_json::Value, ()>(Route::PinMessage { channel_id: cid, message_id: mid }, ())
+            .put::<serde_json::Value, ()>(
+                Route::PinMessage {
+                    channel_id: cid,
+                    message_id: mid,
+                },
+                (),
+            )
             .await
             .context("pin failed")?;
         Ok(())
@@ -435,17 +490,26 @@ impl ApiClient {
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         inner
-            .delete(Route::UnpinMessage { channel_id: cid, message_id: mid })
+            .delete(Route::UnpinMessage {
+                channel_id: cid,
+                message_id: mid,
+            })
             .await
             .context("unpin failed")?;
         Ok(())
     }
 
     /// `GET /channels/{id}/pins` — list pinned messages.
-    pub async fn pinned_messages(&mut self, channel_id: &str) -> Result<Vec<crate::types::Message>> {
+    pub async fn pinned_messages(
+        &mut self,
+        channel_id: &str,
+    ) -> Result<Vec<crate::types::Message>> {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let inner = self.inner()?;
-        let raw: Vec<RawMessage> = inner.get(Route::GetPins { channel_id: cid }).await.context("GET pins failed")?;
+        let raw: Vec<RawMessage> = inner
+            .get(Route::GetPins { channel_id: cid })
+            .await
+            .context("GET pins failed")?;
         Ok(raw
             .into_iter()
             .map(|m| crate::types::Message {
@@ -478,7 +542,13 @@ impl ApiClient {
         let uid: u64 = user_id.parse().context("invalid user id")?;
         let inner = self.inner()?;
         inner
-            .put::<serde_json::Value, ()>(Route::GroupDmAddRecipient { channel_id: cid, user_id: uid }, ())
+            .put::<serde_json::Value, ()>(
+                Route::GroupDmAddRecipient {
+                    channel_id: cid,
+                    user_id: uid,
+                },
+                (),
+            )
             .await
             .context("add group DM recipient failed")?;
         Ok(())
@@ -490,7 +560,10 @@ impl ApiClient {
         let uid: u64 = user_id.parse().context("invalid user id")?;
         let inner = self.inner()?;
         inner
-            .delete(Route::GroupDmRemoveRecipient { channel_id: cid, user_id: uid })
+            .delete(Route::GroupDmRemoveRecipient {
+                channel_id: cid,
+                user_id: uid,
+            })
             .await
             .context("remove group DM recipient failed")?;
         Ok(())
@@ -506,7 +579,10 @@ impl ApiClient {
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
         let raw: RawMessage = inner
-            .get(Route::GetMessage { channel_id: cid, message_id: mid })
+            .get(Route::GetMessage {
+                channel_id: cid,
+                message_id: mid,
+            })
             .await
             .context("GET message failed")?;
         Ok(crate::types::Message {
@@ -552,10 +628,7 @@ impl ApiClient {
             }
             remaining = remaining.saturating_sub(n);
             // Small delay between pages to be rate-limit friendly (jackwener).
-            tokio::time::sleep(std::time::Duration::from_millis(
-                400 + (randish() % 400),
-            ))
-            .await;
+            tokio::time::sleep(std::time::Duration::from_millis(400 + (randish() % 400))).await;
 
             if after.is_some() {
                 cur_after = msgs[0].id.parse().ok();
@@ -589,7 +662,10 @@ impl ApiClient {
 /// Small deterministic-ish jitter (0..400). Not cryptographic.
 fn randish() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos() as u64;
+    let n = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos() as u64;
     n % 400
 }
 
@@ -689,6 +765,7 @@ struct ThreadActiveResponse {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)] // raw response fields kept for completeness
 struct ThreadSearchResponse {
     threads: Vec<RawThread>,
     #[serde(default)]
@@ -762,6 +839,7 @@ struct RawDm {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)] // id kept for completeness
 struct RawDmUser {
     id: String,
     username: String,

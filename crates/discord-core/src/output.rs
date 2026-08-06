@@ -80,11 +80,7 @@ pub fn stdout_is_piped() -> bool {
 
 /// Resolve output format: explicit override, else env `OUTPUT`, else auto.
 /// Auto = JSONL when piped (agent), human when TTY.
-pub fn resolve_format(
-    as_json: bool,
-    as_yaml: bool,
-    env_override: Option<&str>,
-) -> Format {
+pub fn resolve_format(as_json: bool, as_yaml: bool, env_override: Option<&str>) -> Format {
     if as_json && as_yaml {
         // Caller error — but be lenient: prefer JSON.
     }
@@ -128,8 +124,7 @@ pub fn emit<T: Serialize>(data: &T, format: Format) -> std::io::Result<()> {
     match format {
         Format::Jsonl => emit_jsonl_rows(data, &mut lock),
         Format::Json => {
-            let s = serde_json::to_string_pretty(&success(data))
-                .map_err(std::io::Error::other)?;
+            let s = serde_json::to_string_pretty(&success(data)).map_err(std::io::Error::other)?;
             writeln!(lock, "{}", s)
         }
         Format::Yaml => {
@@ -138,8 +133,7 @@ pub fn emit<T: Serialize>(data: &T, format: Format) -> std::io::Result<()> {
         }
         Format::Rich => {
             // Human fallback: JSON for now; commands override with tables.
-            let s = serde_json::to_string_pretty(&success(data))
-                .map_err(std::io::Error::other)?;
+            let s = serde_json::to_string_pretty(&success(data)).map_err(std::io::Error::other)?;
             writeln!(lock, "{}", s)
         }
     }
@@ -221,7 +215,16 @@ mod tests {
 
     #[test]
     fn jsonl_emits_one_row_per_line() {
-        let rows = vec![Msg { id: 1, content: "hi".into() }, Msg { id: 2, content: "yo".into() }];
+        let rows = vec![
+            Msg {
+                id: 1,
+                content: "hi".into(),
+            },
+            Msg {
+                id: 2,
+                content: "yo".into(),
+            },
+        ];
         let mut buf = Vec::new();
         emit_jsonl_rows(&rows, &mut buf).unwrap();
         let text = String::from_utf8(buf).unwrap();

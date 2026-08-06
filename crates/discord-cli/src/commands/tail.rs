@@ -18,18 +18,22 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
         }
     };
 
-    let mut client = discord_user::DiscordUser::new(token)
-        .with_status(discord_user::UserStatus::Invisible); // never empty (renders online)
+    let mut client =
+        discord_user::DiscordUser::new(token).with_status(discord_user::UserStatus::Invisible); // never empty (renders online)
 
     if let Err(e) = client.init().await {
-        return ExitCode::from(output::emit_error("GatewayError", &e.to_string(), exit::ERROR));
+        return ExitCode::from(output::emit_error(
+            "GatewayError",
+            &e.to_string(),
+            exit::ERROR,
+        ));
     }
 
     let target = channel_id.to_string();
     let _sub = client
         .on_message_create(move |event| {
             // Only stream from the requested channel (or all if no filter).
-            if !target.is_empty() && event.message.channel_id.to_string() != target {
+            if !target.is_empty() && event.message.channel_id.as_str() != target {
                 return;
             }
             // JSONL line: timestamp, author, content — agent-friendly.
@@ -70,11 +74,15 @@ pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>)
         }
     };
 
-    let mut client = discord_user::DiscordUser::new(token)
-        .with_status(discord_user::UserStatus::Invisible);
+    let mut client =
+        discord_user::DiscordUser::new(token).with_status(discord_user::UserStatus::Invisible);
 
     if let Err(e) = client.init().await {
-        return ExitCode::from(output::emit_error("GatewayError", &e.to_string(), exit::ERROR));
+        return ExitCode::from(output::emit_error(
+            "GatewayError",
+            &e.to_string(),
+            exit::ERROR,
+        ));
     }
 
     let target_ch = channel.map(|s| s.to_string());
@@ -82,7 +90,7 @@ pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>)
     let _sub = client
         .on_message_create(move |event| {
             if let Some(c) = &target_ch {
-                if event.message.channel_id.to_string() != *c {
+                if event.message.channel_id.as_str() != c {
                     return;
                 }
             }

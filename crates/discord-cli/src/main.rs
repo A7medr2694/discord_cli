@@ -11,7 +11,7 @@ mod resolve;
 use clap::{CommandFactory, Parser, Subcommand};
 use discord_core::client::ApiClient;
 use discord_core::config::load_env;
-use discord_core::output::{self, Format, exit};
+use discord_core::output::{self, exit, Format};
 
 use commands::dc::{DcCtx, DmGroupCmd, NotifyCmd};
 
@@ -315,7 +315,7 @@ fn main() -> ExitCode {
             .stack_size(32 * 1024 * 1024)
             .spawn(run)
             .expect("spawn worker");
-        return worker.join().unwrap_or(ExitCode::from(1));
+        worker.join().unwrap_or(ExitCode::from(1))
     }
     #[cfg(not(windows))]
     run()
@@ -345,66 +345,91 @@ async fn run() -> ExitCode {
         Some(Command::Guilds) => commands::dc::dc_guilds(ctx).await,
         Some(Command::Channels { guild }) => commands::dc::dc_channels(ctx, &guild).await,
         Some(Command::Dms) => commands::dc::dc_dms(ctx).await,
-        Some(Command::History { channel, limit, before, after }) => {
-            commands::dc::dc_history(ctx, &channel, limit, before, after).await
-        }
-        Some(Command::Read { channel, limit, before }) => {
-            commands::dc::dc_read(ctx, &channel, limit, before).await
-        }
+        Some(Command::History {
+            channel,
+            limit,
+            before,
+            after,
+        }) => commands::dc::dc_history(ctx, &channel, limit, before, after).await,
+        Some(Command::Read {
+            channel,
+            limit,
+            before,
+        }) => commands::dc::dc_read(ctx, &channel, limit, before).await,
         Some(Command::Members { guild, max }) => commands::dc::dc_members(ctx, &guild, max).await,
         Some(Command::Info { guild }) => commands::dc::dc_info(ctx, &guild).await,
-        Some(Command::GuildSearch { guild, query, channel, limit }) => {
-            commands::dc::dc_search(ctx, &guild, &query, channel.as_deref(), limit).await
-        }
+        Some(Command::GuildSearch {
+            guild,
+            query,
+            channel,
+            limit,
+        }) => commands::dc::dc_search(ctx, &guild, &query, channel.as_deref(), limit).await,
         Some(Command::Roles { guild }) => commands::dc::dc_roles(ctx, &guild).await,
-        Some(Command::Profile { user_id }) => commands::dc::dc_profile(ctx, user_id.as_deref()).await,
+        Some(Command::Profile { user_id }) => {
+            commands::dc::dc_profile(ctx, user_id.as_deref()).await
+        }
         Some(Command::Relationships) => commands::dc::dc_relationships(ctx).await,
         Some(Command::Threads { channel }) => commands::dc::dc_threads(ctx, &channel).await,
-        Some(Command::Send { channel, text, reply, confirm, dry_run }) => {
-            commands::dc::dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await
-        }
-        Some(Command::Edit { channel, message_id, text }) => {
-            commands::dc::dc_edit(ctx, &channel, &message_id, &text).await
-        }
-        Some(Command::Delete { channel, message_id, confirm }) => {
-            commands::dc::dc_delete(ctx, &channel, &message_id, confirm).await
-        }
-        Some(Command::React { channel, message_id, emoji }) => {
-            commands::dc::dc_react(ctx, &channel, &message_id, &emoji).await
-        }
-        Some(Command::Unreact { channel, message_id, emoji }) => {
-            commands::dc::dc_unreact(ctx, &channel, &message_id, &emoji).await
-        }
-        Some(Command::Pin { channel, message_id }) => {
-            commands::dc::dc_pin(ctx, &channel, &message_id).await
-        }
+        Some(Command::Send {
+            channel,
+            text,
+            reply,
+            confirm,
+            dry_run,
+        }) => commands::dc::dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await,
+        Some(Command::Edit {
+            channel,
+            message_id,
+            text,
+        }) => commands::dc::dc_edit(ctx, &channel, &message_id, &text).await,
+        Some(Command::Delete {
+            channel,
+            message_id,
+            confirm,
+        }) => commands::dc::dc_delete(ctx, &channel, &message_id, confirm).await,
+        Some(Command::React {
+            channel,
+            message_id,
+            emoji,
+        }) => commands::dc::dc_react(ctx, &channel, &message_id, &emoji).await,
+        Some(Command::Unreact {
+            channel,
+            message_id,
+            emoji,
+        }) => commands::dc::dc_unreact(ctx, &channel, &message_id, &emoji).await,
+        Some(Command::Pin {
+            channel,
+            message_id,
+        }) => commands::dc::dc_pin(ctx, &channel, &message_id).await,
         Some(Command::Pins { channel }) => commands::dc::dc_pins(ctx, &channel).await,
         Some(Command::Sync { channel, limit }) => commands::dc::dc_sync(ctx, &channel, limit).await,
         Some(Command::SyncAll { limit }) => commands::dc::dc_sync_all(ctx, limit).await,
-        Some(Command::Tail { channel, once }) => {
-            commands::tail::dc_tail(ctx, &channel, once).await
-        }
+        Some(Command::Tail { channel, once }) => commands::tail::dc_tail(ctx, &channel, once).await,
         Some(Command::Watch { channel, keyword }) => {
             commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
         }
         Some(Command::DmGroup { cmd }) => commands::dc::dc_dm_group(ctx, cmd).await,
         Some(Command::Notify { cmd }) => commands::dc::dc_notify(ctx, cmd).await,
-        Some(Command::Search { keyword, channel, limit }) => {
-            commands::local::cmd_search(&keyword, channel.as_deref(), limit, format)
-        }
-        Some(Command::Recent { channel, hours, limit }) => {
-            commands::local::cmd_recent(channel.as_deref(), hours, limit, format)
-        }
+        Some(Command::Search {
+            keyword,
+            channel,
+            limit,
+        }) => commands::local::cmd_search(&keyword, channel.as_deref(), limit, format),
+        Some(Command::Recent {
+            channel,
+            hours,
+            limit,
+        }) => commands::local::cmd_recent(channel.as_deref(), hours, limit, format),
         Some(Command::Stats) => commands::local::cmd_stats(format),
         Some(Command::Top { channel, limit }) => {
             commands::local::cmd_top(channel.as_deref(), limit, format)
         }
-        Some(Command::Export { channel, json, output }) => {
-            commands::local::cmd_export(&channel, json, output.as_deref(), format)
-        }
-        Some(Command::Purge { channel, yes }) => {
-            commands::local::cmd_purge(&channel, yes, format)
-        }
+        Some(Command::Export {
+            channel,
+            json,
+            output,
+        }) => commands::local::cmd_export(&channel, json, output.as_deref(), format),
+        Some(Command::Purge { channel, yes }) => commands::local::cmd_purge(&channel, yes, format),
         Some(Command::Auth { save, paste }) => cmd_auth(save, paste, format).await,
         Some(Command::Serve) => cmd_serve().await,
         None => {
@@ -421,11 +446,7 @@ async fn cmd_status(cli: &Cli, format: Format) -> ExitCode {
     let mut client = match ApiClient::from_env(cli.token.as_deref()) {
         Ok(c) => c,
         Err(e) => {
-            return ExitCode::from(output::emit_error(
-                "AuthError",
-                &e.to_string(),
-                exit::ERROR,
-            ))
+            return ExitCode::from(output::emit_error("AuthError", &e.to_string(), exit::ERROR))
         }
     };
 
@@ -448,7 +469,7 @@ async fn cmd_auth(save: bool, paste: bool, format: Format) -> ExitCode {
     // Paste flow.
     if paste {
         match discord_auth::auth::auth_paste(save).await {
-            Ok(token) => {
+            Ok(_token) => {
                 let _ = output::emit(
                     &serde_json::json!({ "authenticated": true, "token_saved": save, "token": "***" }),
                     format,
@@ -501,11 +522,7 @@ async fn cmd_whoami(cli: &Cli, format: Format) -> ExitCode {
     let mut client = match ApiClient::from_env(cli.token.as_deref()) {
         Ok(c) => c,
         Err(e) => {
-            return ExitCode::from(output::emit_error(
-                "AuthError",
-                &e.to_string(),
-                exit::ERROR,
-            ))
+            return ExitCode::from(output::emit_error("AuthError", &e.to_string(), exit::ERROR))
         }
     };
 
@@ -514,10 +531,6 @@ async fn cmd_whoami(cli: &Cli, format: Format) -> ExitCode {
             let _ = output::emit(&me, format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error(
-            "NotFound",
-            &e.to_string(),
-            exit::ERROR,
-        )),
+        Err(e) => ExitCode::from(output::emit_error("NotFound", &e.to_string(), exit::ERROR)),
     }
 }
