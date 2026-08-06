@@ -5,6 +5,8 @@
 
 use std::process::ExitCode;
 
+mod resolve;
+
 use clap::{CommandFactory, Parser, Subcommand};
 use discord_core::client::ApiClient;
 use discord_core::config::load_env;
