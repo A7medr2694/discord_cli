@@ -379,6 +379,60 @@ impl ApiClient {
         Ok(resp.id.to_string())
     }
 
+    /// Build the v10 multipart `payload_json` for a message with attachments.
+    /// Exposed for unit testing (no network). The `attachments` descriptor
+    /// array uses `id` = index-as-string (discord.js MessagePayload style).
+    fn build_send_payload(
+        content: &str,
+        reply_to: Option<&str>,
+        n_files: usize,
+    ) -> anyhow::Result<serde_json::Value> {
+        let req = discord_user::types::SendMessageRequest {
+            content,
+            tts: false,
+            flags: 0,
+            message_reference: reply_to.map(|id| discord_user::types::MessageReference {
+                reference_type: None,
+                message_id: Some(id.to_string()),
+                channel_id: None,
+                guild_id: None,
+            }),
+            nonce: None,
+            mobile_network_type: Some("unknown"), // mimic Discord mobile (selfbot)
+        };
+        let mut payload = serde_json::to_value(&req).context("serialize send payload")?;
+        let atts: Vec<serde_json::Value> = (0..n_files)
+            .map(|i| serde_json::json!({ "id": i.to_string() }))
+            .collect();
+        payload["attachments"] = serde_json::Value::Array(atts);
+        Ok(payload)
+    }
+
+    /// `POST /channels/{id}/messages` — send a message with file attachments
+    /// (multipart). payload_json carries the message body; each file is a
+    /// `files[N]` part with an `attachments:[{id:"0"}]` descriptor array
+    /// (Discord v10 style, cf. discord.js MessagePayload).
+    pub async fn send_message_with_files(
+        &mut self,
+        channel_id: &str,
+        content: &str,
+        reply_to: Option<&str>,
+        attachments: Vec<discord_user::types::CreateAttachment>,
+    ) -> Result<String> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let payload = Self::build_send_payload(content, reply_to, attachments.len())?;
+        let resp: RawMessage = inner
+            .post_multipart(
+                Route::CreateMessage { channel_id: cid },
+                payload,
+                attachments,
+            )
+            .await
+            .context("POST /channels/{id}/messages (multipart) failed")?;
+        Ok(resp.id.to_string())
+    }
+
     /// `PATCH /channels/{id}/messages/{mid}` — edit own message (M3.2).
     pub async fn edit_message(
         &mut self,
@@ -913,5 +967,34 @@ mod tests {
             let r = randish();
             assert!(r < 400, "randish out of bounds: {r}");
         }
+    }
+
+    #[test]
+    fn build_send_payload_has_attachments_when_files() {
+        let p = ApiClient::build_send_payload("hello", None, 1).unwrap();
+        assert_eq!(p["content"], "hello");
+        assert_eq!(p["attachments"], serde_json::json!([{ "id": "0" }]));
+        // mobile_network_type preserved (user-token mimic).
+        assert_eq!(p["mobile_network_type"], "unknown");
+    }
+
+    #[test]
+    fn build_send_payload_multi_file_ids() {
+        let p = ApiClient::build_send_payload("x", Some("123"), 3).unwrap();
+        assert_eq!(
+            p["attachments"],
+            serde_json::json!([{ "id": "0" }, { "id": "1" }, { "id": "2" }])
+        );
+        assert_eq!(p["message_reference"]["message_id"], "123");
+    }
+
+    #[test]
+    fn build_send_payload_no_files_no_attachments_key() {
+        // Without files, no attachments descriptor (matches plain send path).
+        let p = ApiClient::build_send_payload("plain", None, 0).unwrap();
+        assert!(
+            p.get("attachments").is_none()
+                || p["attachments"].as_array().is_some_and(|a| a.is_empty())
+        );
     }
 }

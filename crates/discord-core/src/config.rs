@@ -238,8 +238,17 @@ mod tests {
 
     #[test]
     fn device_id_is_stable_and_prefixed() {
-        // device_id writes to the real data dir; use a temp DATA_DIR.
-        let tmp = std::env::temp_dir().join(format!("discord-device-test-{}", std::process::id()));
+        // device_id writes to the real data dir; use a unique temp DATA_DIR
+        // (pid alone collides across parallel tests in the same process).
+        let unique = format!(
+            "discord-device-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let tmp = std::env::temp_dir().join(unique);
         std::env::set_var("DATA_DIR", &tmp);
         let id1 = device_id().unwrap();
         let id2 = device_id().unwrap();
