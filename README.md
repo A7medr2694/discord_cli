@@ -204,6 +204,20 @@ discord watch --keyword "incident" --jsonl
 ## Installation
 
 ```bash
+# macOS / Linux — one-liner (downloads prebuilt binary)
+curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash
+# ...with PATH auto-update + self-test
+curl -fsSL ".../install.sh" | bash -s -- --easy-mode --verify
+```
+
+```powershell
+# Windows PowerShell
+irm "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.ps1" | iex
+```
+
+**Prebuilt binaries** are attached to every GitHub release (Linux x86_64/aarch64 musl, macOS x86_64/aarch64, Windows x86_64) with `.sha256` checksums.
+
+```bash
 # From source (requires Rust 1.80+)
 cargo install --path crates/discord-cli --locked
 # or build the workspace binary
