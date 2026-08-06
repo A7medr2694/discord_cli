@@ -144,12 +144,20 @@ enum Command {
         /// Reply to a message id.
         #[arg(long)]
         reply: Option<String>,
+        /// Send a typing indicator first (mimics a human composing).
+        #[arg(long)]
+        typing: bool,
         /// Confirm a non-reply send (never interactive).
         #[arg(long)]
         confirm: bool,
         /// Preview what would be sent without sending.
         #[arg(long)]
         dry_run: bool,
+    },
+    /// Send a typing indicator to a channel (one-shot).
+    Typing {
+        /// Channel name or ID.
+        channel: String,
     },
     /// Edit an own message.
     Edit {
@@ -378,20 +386,25 @@ async fn run() -> ExitCode {
             text,
             file,
             reply,
+            typing,
             confirm,
             dry_run,
         }) => {
             commands::dc::dc_send(
                 ctx,
                 &channel,
-                text.as_deref(),
-                &file,
-                reply.as_deref(),
-                confirm,
-                dry_run,
+                commands::dc::SendOpts {
+                    text: text.as_deref(),
+                    files: &file,
+                    reply: reply.as_deref(),
+                    typing,
+                    confirm,
+                    dry_run,
+                },
             )
             .await
         }
+        Some(Command::Typing { channel }) => commands::dc::dc_typing(ctx, &channel).await,
         Some(Command::Edit {
             channel,
             message_id,

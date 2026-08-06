@@ -433,6 +433,19 @@ impl ApiClient {
         Ok(resp.id.to_string())
     }
 
+    /// `POST /channels/{id}/typing` — send typing indicator (no body).
+    /// Reference: discordo composer.sendTyping() → Client.Typing (10s throttle
+    /// enforced by caller; API itself is fire-and-forget).
+    pub async fn trigger_typing(&mut self, channel_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        inner
+            .post_empty(Route::TriggerTyping { channel_id: cid })
+            .await
+            .context("POST /channels/{id}/typing failed")?;
+        Ok(())
+    }
+
     /// `PATCH /channels/{id}/messages/{mid}` — edit own message (M3.2).
     pub async fn edit_message(
         &mut self,

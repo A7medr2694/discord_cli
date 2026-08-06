@@ -168,3 +168,23 @@ fn send_help_shows_file_flag() {
     assert!(stdout.contains("--file"), "stdout: {stdout}");
     assert!(stdout.contains("stdin"), "stdout: {stdout}");
 }
+
+#[test]
+fn typing_command_exists() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["typing", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("typing indicator"), "stdout: {stdout}");
+}
+
+#[test]
+fn send_help_shows_typing_flag() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["send", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--typing"), "stdout: {stdout}");
+}

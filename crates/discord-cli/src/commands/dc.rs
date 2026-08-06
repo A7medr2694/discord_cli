@@ -109,12 +109,20 @@ pub enum DcCmd {
         /// Reply to a message id.
         #[arg(long)]
         reply: Option<String>,
+        /// Send a typing indicator first (mimics a human composing).
+        #[arg(long)]
+        typing: bool,
         /// Confirm a non-reply send (never interactive).
         #[arg(long)]
         confirm: bool,
         /// Preview what would be sent without sending.
         #[arg(long)]
         dry_run: bool,
+    },
+    /// Send a typing indicator to a channel (one-shot).
+    Typing {
+        /// Channel name or ID.
+        channel: String,
     },
     /// Edit an own message.
     Edit {
@@ -617,15 +625,26 @@ async fn load_attachments(
     Ok(out)
 }
 
-pub async fn dc_send(
-    ctx: &DcCtx,
-    channel: &str,
-    text: Option<&str>,
-    files: &[String],
-    reply: Option<&str>,
-    confirm: bool,
-    dry_run: bool,
-) -> ExitCode {
+/// Options for `dc send` (avoids clippy too_many_arguments).
+#[derive(Default)]
+pub struct SendOpts<'a> {
+    pub text: Option<&'a str>,
+    pub files: &'a [String],
+    pub reply: Option<&'a str>,
+    pub typing: bool,
+    pub confirm: bool,
+    pub dry_run: bool,
+}
+
+pub async fn dc_send(ctx: &DcCtx, channel: &str, opts: SendOpts<'_>) -> ExitCode {
+    let SendOpts {
+        text,
+        files,
+        reply,
+        typing,
+        confirm,
+        dry_run,
+    } = opts;
     // Require text or at least one file.
     if text.is_none() && files.is_empty() {
         eprintln!("nothing to send: provide --text (or --text -) and/or --file");
@@ -672,6 +691,14 @@ pub async fn dc_send(
         Ok(id) => id,
         Err(code) => return code,
     };
+    // Optional typing indicator before sending (discordo composer: fires per
+    // keypress, throttled 10s; here one-shot before the message).
+    if typing {
+        if let Err(e) = client.trigger_typing(&channel_id).await {
+            eprintln!("warning: typing indicator failed: {e}");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     let result = if attachments.is_empty() {
         client.send_message(&channel_id, &text, reply).await
     } else {
@@ -682,6 +709,26 @@ pub async fn dc_send(
     match result {
         Ok(id) => {
             let data = serde_json::json!({ "message_id": id, "channel_id": channel_id });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc typing <CHANNEL>` — send a typing indicator (one-shot).
+pub async fn dc_typing(ctx: &DcCtx, channel: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.trigger_typing(&channel_id).await {
+        Ok(()) => {
+            let data = serde_json::json!({ "typing": true, "channel_id": channel_id });
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
@@ -903,20 +950,25 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
             text,
             file,
             reply,
+            typing,
             confirm,
             dry_run,
         } => {
             dc_send(
                 ctx,
                 &channel,
-                text.as_deref(),
-                &file,
-                reply.as_deref(),
-                confirm,
-                dry_run,
+                SendOpts {
+                    text: text.as_deref(),
+                    files: &file,
+                    reply: reply.as_deref(),
+                    typing,
+                    confirm,
+                    dry_run,
+                },
             )
             .await
         }
+        DcCmd::Typing { channel } => dc_typing(ctx, &channel).await,
         DcCmd::Edit {
             channel,
             message_id,
