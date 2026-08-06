@@ -175,10 +175,11 @@ mod tests {
     #[test]
     fn regex_matches_token_shape() {
         let re = regex::Regex::new(TOKEN_REGEX).unwrap();
+        // Real Discord token format: <24+ base64 id>.<6 timestamp>.<27+ hmac>
         // Build a token-shaped string programmatically (not a real token —
-        // avoid tripping GitHub secret scanning). Format: <24+>.<6+>.<27+>
+        // avoid tripping GitHub secret scanning).
         let part1 = "A".repeat(26);
-        let part2 = "B".repeat(8);
+        let part2 = "B".repeat(6); // timestamp is exactly 6 chars
         let part3 = "C".repeat(30);
         let fake = format!("{}.{}.{}", part1, part2, part3);
         assert!(re.is_match(&fake), "should match user-token shape");
@@ -200,5 +201,20 @@ mod tests {
         assert_eq!(content.lines().filter(|l| l.starts_with("DISCORD_TOKEN=")).count(), 1);
         assert!(content.contains("DISCORD_TOKEN=tok2"));
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod debug_tests {
+    #[test]
+    fn debug_regex() {
+        let re = regex::Regex::new(super::TOKEN_REGEX).unwrap();
+        let part1 = "A".repeat(26);
+        let part2 = "B".repeat(8);
+        let part3 = "C".repeat(30);
+        let fake = format!("{}.{}.{}", part1, part2, part3);
+        eprintln!("fake: [{}]", &fake[..20]);
+        eprintln!("p1 match: {}", re.is_match(&part1));
+        eprintln!("full match: {}", re.is_match(&fake));
     }
 }
