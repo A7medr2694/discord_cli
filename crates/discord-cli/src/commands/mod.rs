@@ -4,3 +4,4 @@
 //! takes a shared context (token flag + output format) and returns `ExitCode`.
 
 pub mod dc;
+pub mod sync;

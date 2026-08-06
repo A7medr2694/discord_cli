@@ -163,6 +163,20 @@ pub enum DcCmd {
         /// Channel name or ID.
         channel: String,
     },
+    /// Incrementally sync a channel's history to SQLite.
+    Sync {
+        /// Channel name or ID.
+        channel: String,
+        /// Max messages (default 5000).
+        #[arg(short, long, default_value_t = 5000)]
+        limit: usize,
+    },
+    /// Discover and sync all accessible text channels (bounded).
+    SyncAll {
+        /// Per-channel cap (default 200).
+        #[arg(short, long, default_value_t = 200)]
+        limit: usize,
+    },
 }
 
 impl DcCtx {
@@ -615,6 +629,61 @@ pub async fn dc_pins(ctx: &DcCtx, channel: &str) -> ExitCode {
     }
 }
 
+/// `dc sync <CHANNEL>` — two-phase incremental sync to SQLite.
+pub async fn dc_sync(ctx: &DcCtx, channel: &str, limit: usize) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match crate::commands::sync::sync_channel(&mut client, &channel_id, limit).await {
+        Ok(n) => {
+            let data = serde_json::json!({ "channel_id": channel_id, "messages_synced": n });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("SyncError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc sync-all` — discover accessible channels and sync each (bounded).
+pub async fn dc_sync_all(ctx: &DcCtx, limit: usize) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guilds = match client.list_guilds().await {
+        Ok(g) => g,
+        Err(e) => return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    };
+    let mut total = 0usize;
+    let mut channels_synced = 0usize;
+    for g in &guilds {
+        let channels = match client.list_channels(&g.id).await {
+            Ok(c) => c,
+            Err(_) => continue, // skip guilds we can't read
+        };
+        for ch in channels {
+            match crate::commands::sync::sync_channel(&mut client, &ch.id, limit).await {
+                Ok(n) => {
+                    total += n;
+                    channels_synced += 1;
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    let data = serde_json::json!({
+        "channels_synced": channels_synced,
+        "messages_total": total,
+    });
+    let _ = output::emit(&data, ctx.format);
+    ExitCode::from(exit::OK)
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -653,5 +722,7 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         }
         DcCmd::Pin { channel, message_id } => dc_pin(ctx, &channel, &message_id).await,
         DcCmd::Pins { channel } => dc_pins(ctx, &channel).await,
+        DcCmd::Sync { channel, limit } => dc_sync(ctx, &channel, limit).await,
+        DcCmd::SyncAll { limit } => dc_sync_all(ctx, limit).await,
     }
 }
