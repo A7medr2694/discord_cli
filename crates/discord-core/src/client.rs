@@ -283,6 +283,52 @@ impl ApiClient {
         })
     }
 
+    /// List active threads in a channel.
+    ///
+    /// **User-token pitfall (langkurt):** `GET /channels/{id}/threads` (active)
+    /// is BOT-ONLY → 403 for user tokens. Fallback to what Discord's own app
+    /// uses: `GET /channels/{id}/threads/search` (offset-paginated).
+    pub async fn list_threads(&mut self, channel_id: &str) -> Result<Vec<Channel>> {
+        // Try the bot-only active endpoint first; on 403 fall back.
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let threads_url = format!("channels/{}/threads/active", channel_id);
+        let bot_only: std::result::Result<ThreadActiveResponse, _> =
+            inner.get(Route::Custom(threads_url.into())).await;
+        match bot_only {
+            Ok(resp) => Ok(resp
+                .threads
+                .into_iter()
+                .map(raw_thread_to_channel)
+                .collect()),
+            Err(_) => {
+                // 403 → user-token fallback: threads/search, offset-paginated.
+                let mut out = Vec::new();
+                let mut offset: u64 = 0;
+                loop {
+                    let url = format!(
+                        "channels/{}/threads/search?limit=25&sort_by=last_message_time&sort_order=desc&archived=false&offset={}",
+                        channel_id, offset
+                    );
+                    let resp: ThreadSearchResponse = inner
+                        .get(Route::Custom(url.into()))
+                        .await
+                        .context("threads/search failed")?;
+                    let n = resp.threads.len();
+                    out.extend(resp.threads.into_iter().map(raw_thread_to_channel));
+                    offset += n as u64;
+                    if !resp.has_more || n == 0 {
+                        break;
+                    }
+                    // rate-limit friendly pause (langkurt sleeps 300ms)
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
+                let _ = cid;
+                Ok(out)
+            }
+        }
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
@@ -443,6 +489,44 @@ struct RawProfileUser {
     username: String,
     #[serde(default)]
     global_name: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ThreadActiveResponse {
+    threads: Vec<RawThread>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ThreadSearchResponse {
+    threads: Vec<RawThread>,
+    #[serde(default)]
+    has_more: bool,
+    #[serde(default)]
+    total_results: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawThread {
+    id: u64,
+    name: String,
+    #[serde(rename = "type")]
+    channel_type: u8,
+    #[serde(default)]
+    parent_id: Option<u64>,
+    #[serde(default)]
+    position: i32,
+}
+
+fn raw_thread_to_channel(t: RawThread) -> Channel {
+    Channel {
+        id: t.id.to_string(),
+        name: t.name,
+        guild_id: None,
+        channel_type: t.channel_type,
+        topic: None,
+        parent_id: t.parent_id.map(|p| p.to_string()),
+        position: Some(t.position),
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

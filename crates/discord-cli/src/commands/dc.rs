@@ -91,6 +91,11 @@ pub enum DcCmd {
     },
     /// Show friends/blocked/pending relationships.
     Relationships,
+    /// List active threads in a channel (user-token fallback).
+    Threads {
+        /// Channel name or ID.
+        channel: String,
+    },
 }
 
 impl DcCtx {
@@ -357,6 +362,25 @@ pub async fn dc_relationships(ctx: &DcCtx) -> ExitCode {
     }
 }
 
+/// `dc threads <CHANNEL>`
+pub async fn dc_threads(ctx: &DcCtx, channel: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.list_threads(&channel_id).await {
+        Ok(threads) => {
+            let _ = output::emit(&threads, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -377,5 +401,6 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Roles { guild } => dc_roles(ctx, &guild).await,
         DcCmd::Profile { user_id } => dc_profile(ctx, user_id.as_deref()).await,
         DcCmd::Relationships => dc_relationships(ctx).await,
+        DcCmd::Threads { channel } => dc_threads(ctx, &channel).await,
     }
 }
