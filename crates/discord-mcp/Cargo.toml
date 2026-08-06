@@ -1,0 +1,18 @@
+[package]
+name = "discord-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MCP server (rmcp stdio) exposing Discord tools to AI agents"
+
+[dependencies]
+tokio.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rmcp.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+discord-core = { path = "../discord-core" }
+discord-db = { path = "../discord-db" }

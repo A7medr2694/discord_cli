@@ -1,0 +1,23 @@
+# Build artifacts
+/target
+
+# Discord token — NEVER commit
+.env
+*.env
+!.env.example
+
+# Beads workspace local DB (JSONL is committed)
+.beads/*.db
+.beads/*.db-*
+
+# Local research clones
+/.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
