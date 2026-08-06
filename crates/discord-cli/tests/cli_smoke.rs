@@ -237,3 +237,22 @@ fn leave_requires_confirm() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("--confirm"), "stderr: {stderr}");
 }
+
+#[test]
+fn presence_invalid_value_exits_2() {
+    let out = no_token_cmd().args(["presence", "bogus"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2), "invalid presence must exit 2");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid presence"), "stderr: {stderr}");
+}
+
+#[test]
+fn presence_help_shows_valid_values() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["presence", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("online"), "stdout: {stdout}");
+    assert!(stdout.contains("invisible"), "stdout: {stdout}");
+}

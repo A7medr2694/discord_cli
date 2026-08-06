@@ -175,6 +175,11 @@ enum Command {
         #[arg(long)]
         confirm: bool,
     },
+    /// Show or set presence (online|idle|dnd|invisible).
+    Presence {
+        /// New status. Omit to show the configured default.
+        status: Option<String>,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -429,6 +434,9 @@ async fn run() -> ExitCode {
         }
         Some(Command::Leave { guild, confirm }) => {
             commands::dc::dc_leave(ctx, &guild, confirm).await
+        }
+        Some(Command::Presence { status }) => {
+            commands::dc::dc_presence(ctx, status.as_deref()).await
         }
         Some(Command::Edit {
             channel,

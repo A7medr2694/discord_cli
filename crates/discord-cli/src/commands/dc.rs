@@ -140,6 +140,11 @@ pub enum DcCmd {
         #[arg(long)]
         confirm: bool,
     },
+    /// Show or set presence (online|idle|dnd|invisible).
+    Presence {
+        /// New status. Omit to show the configured default.
+        status: Option<String>,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -825,6 +830,29 @@ pub async fn dc_leave(ctx: &DcCtx, guild: &str, confirm: bool) -> ExitCode {
     }
 }
 
+/// `dc presence [STATUS]` — show configured default or set presence.
+/// Setting persists to config.json; the live gateway Op 3 applies when a
+/// `tail`/`watch` session is active (F4a). Default is invisible (stealth).
+pub async fn dc_presence(ctx: &DcCtx, status: Option<&str>) -> ExitCode {
+    match status {
+        None => {
+            let current = discord_core::config::configured_presence();
+            let data = serde_json::json!({ "presence": current });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Some(s) => {
+            if !discord_core::config::set_configured_presence(s) {
+                eprintln!("invalid presence: \"{s}\" (valid: online, idle, dnd, invisible)");
+                return ExitCode::from(exit::USAGE);
+            }
+            let data = serde_json::json!({ "presence": s, "saved": true });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+    }
+}
+
 /// `dc edit <CHANNEL> <MSG_ID> --text ...`
 pub async fn dc_edit(ctx: &DcCtx, channel: &str, message_id: &str, text: &str) -> ExitCode {
     let mut client = match ctx.client().await {
@@ -1060,6 +1088,7 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Typing { channel } => dc_typing(ctx, &channel).await,
         DcCmd::Join { invite, confirm } => dc_join(ctx, &invite, confirm).await,
         DcCmd::Leave { guild, confirm } => dc_leave(ctx, &guild, confirm).await,
+        DcCmd::Presence { status } => dc_presence(ctx, status.as_deref()).await,
         DcCmd::Edit {
             channel,
             message_id,

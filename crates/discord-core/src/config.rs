@@ -166,6 +166,44 @@ pub fn delete_token_keyring() -> Result<()> {
 ///
 /// Persisted in the config dir so each install looks distinct to Discord.
 /// Regenerated only if missing (never per-run — that looks bot-like).
+/// Config file for per-install settings (presence, etc.).
+fn config_file() -> Result<PathBuf> {
+    Ok(data_dir()?.join("config.json"))
+}
+
+/// Current configured presence status. Defaults to "invisible" (stealth
+/// posture); empty string coerces to invisible (mrarfarf 3-layer coercion).
+/// Valid values: online | idle | dnd | invisible.
+pub fn configured_presence() -> String {
+    let path = match config_file() {
+        Ok(p) => p,
+        Err(_) => return "invisible".to_string(),
+    };
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let v: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+    match v.get("presence").and_then(|p| p.as_str()) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => "invisible".to_string(),
+    }
+}
+
+/// Persist the configured presence (writes config.json). Invalid values are
+/// rejected (returns false); the value is stored exactly as given.
+pub fn set_configured_presence(status: &str) -> bool {
+    if !matches!(status, "online" | "idle" | "dnd" | "invisible") {
+        return false;
+    }
+    let path = match config_file() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    let raw = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let mut v: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+    v["presence"] = serde_json::Value::String(status.to_string());
+    std::fs::write(&path, serde_json::to_string_pretty(&v).unwrap_or_default()).ok();
+    true
+}
+
 pub fn device_id() -> Result<String> {
     let dir = data_dir()?;
     let path = dir.join("device_id");

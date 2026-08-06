@@ -9,6 +9,17 @@ use discord_core::output::{self, exit};
 
 use super::dc::DcCtx;
 
+/// Map the configured presence string to a gateway UserStatus.
+/// Defaults to Invisible (stealth posture; mrarfarf 3-layer coercion).
+fn configured_status() -> discord_user::UserStatus {
+    match discord_core::config::configured_presence().as_str() {
+        "online" => discord_user::UserStatus::Online,
+        "idle" => discord_user::UserStatus::Idle,
+        "dnd" => discord_user::UserStatus::DoNotDisturb,
+        _ => discord_user::UserStatus::Invisible,
+    }
+}
+
 /// `dc tail <CHANNEL> [--once]` — stream new messages.
 pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
     let token = match discord_core::config::resolve_token(ctx.token.as_deref()) {
@@ -18,8 +29,7 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
         }
     };
 
-    let mut client = discord_user::DiscordUser::new(token.clone())
-        .with_status(discord_user::UserStatus::Invisible); // never empty (renders online)
+    let mut client = discord_user::DiscordUser::new(token.clone()).with_status(configured_status()); // stealth default invisible
 
     if let Err(e) = client.init().await {
         return ExitCode::from(output::emit_error(
@@ -80,8 +90,7 @@ pub async fn dc_watch(
         }
     };
 
-    let mut client = discord_user::DiscordUser::new(token.clone())
-        .with_status(discord_user::UserStatus::Invisible);
+    let mut client = discord_user::DiscordUser::new(token.clone()).with_status(configured_status());
 
     if let Err(e) = client.init().await {
         return ExitCode::from(output::emit_error(
