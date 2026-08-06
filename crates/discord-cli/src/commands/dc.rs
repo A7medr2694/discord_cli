@@ -185,6 +185,15 @@ pub enum DcCmd {
         #[arg(long)]
         once: bool,
     },
+    /// Long-running JSONL stream for agents (optional filters).
+    Watch {
+        /// Only stream this channel ID.
+        #[arg(long)]
+        channel: Option<String>,
+        /// Only stream messages containing this keyword.
+        #[arg(long)]
+        keyword: Option<String>,
+    },
 }
 
 impl DcCtx {
@@ -733,5 +742,8 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Sync { channel, limit } => dc_sync(ctx, &channel, limit).await,
         DcCmd::SyncAll { limit } => dc_sync_all(ctx, limit).await,
         DcCmd::Tail { channel, once } => crate::commands::tail::dc_tail(ctx, &channel, once).await,
+        DcCmd::Watch { channel, keyword } => {
+            crate::commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
+        }
     }
 }
