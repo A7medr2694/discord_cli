@@ -1,0 +1,58 @@
+# AGENTS.md — Guidance for AI agents driving discord-cli
+
+This file helps AI agents (Claude Code, etc.) use `discord-cli` correctly.
+
+## What this is
+
+A Rust CLI + MCP server that operates a **user** Discord account (self-bot style) on the user's behalf. It reads/sends/searches across every server, group, and DM the account belongs to.
+
+## ⚠️ Non-negotiable
+
+- **ToS risk**: user-token automation can get the account banned. Never bulk-crawl, never `sync-all` unbounded, always respect rate limits.
+- **Destructive actions require `--confirm`** — the agent must not bypass this.
+- **Never print or log the token.**
+
+## Command conventions
+
+- Top-level verbs: `status`, `whoami`, `auth`, `serve`, plus local queries `search` / `recent` / `stats` / `top` / `export` / `purge`.
+- `dc` group: `guilds`, `channels`, `dms`, `history`, `read`, `send`, `edit`, `delete`, `react`, `unreact`, `pin`, `pins`, `members`, `info`, `search`, `roles`, `profile`, `relationships`, `threads`, `sync`, `sync-all`, `tail`, `watch`, `dm-group`, `notify`.
+- **Output**: JSONL when piped, `--json` for a single envelope `{ok, schema_version, data|error}`.
+- **Exit codes**: `0` ok, `1` error, `2` usage (missing `--confirm`), `3` not found, `4` forbidden, `5` network.
+- **Errors → stderr**, data → stdout.
+
+## Agent playbook (common flows)
+
+### "Summarize a channel"
+```
+discord dc read <CHANNEL> -n 200 --json   # fetch recent messages
+discord dc sync <CHANNEL> -n 2000         # archive for offline search
+discord search "deploy" -n 50             # find mentions offline
+```
+Then synthesize the JSON into a summary. Prefer `--json` output (machine-readable).
+
+### "What can I see?"
+```
+discord dc guilds --json
+discord dc channels <GUILD> --json
+discord dc dms --json
+```
+
+### "Reply to someone"
+```
+discord dc send <CHANNEL> --text "..." --reply <MSG_ID>   # reply is auto-approved
+discord dc send <CHANNEL> --text "..." --confirm          # new message needs --confirm
+```
+
+### "Watch for keywords"
+```
+discord dc watch --keyword "bug" --jsonl    # stream matching messages as JSONL
+```
+
+## MCP mode
+
+`discord serve` exposes 11 tools over stdio. `send_message` is intentionally **not** auto-approved in the MCP client — the agent should request approval.
+
+## Style
+
+- Reference the user by name only if known; never assume gender.
+- When in doubt about a write action, use `--dry-run` first.
