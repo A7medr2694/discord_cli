@@ -71,3 +71,32 @@ fn send_dry_run_exits_0_with_preview() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("\"action\":\"send_message\""));
 }
+
+#[test]
+fn serve_command_exists() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["serve", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("MCP server"), "stdout: {stdout}");
+}
+
+#[test]
+fn watch_command_exists() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "watch", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("JSONL stream"));
+}
+
+#[test]
+fn dm_group_create_requires_confirm() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "dm-group", "create", "123,456"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "dm-group create must exit 2 without --confirm");
+}
