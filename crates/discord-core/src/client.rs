@@ -458,6 +458,41 @@ impl ApiClient {
             .collect())
     }
 
+    /// `POST /users/@me/channels` — create a group DM (M3.4).
+    pub async fn create_group_dm(&mut self, user_ids: &[String]) -> Result<String> {
+        let inner = self.inner()?;
+        let body = serde_json::json!({ "access_tokens": [], "recipients": user_ids });
+        let resp: RawDm = inner
+            .post(Route::CreateGroupDm, body)
+            .await
+            .context("create group DM failed")?;
+        Ok(resp.id.to_string())
+    }
+
+    /// `PUT /channels/{id}/recipients/{user_id}` — add to group DM (M3.4).
+    pub async fn group_dm_add(&mut self, channel_id: &str, user_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let uid: u64 = user_id.parse().context("invalid user id")?;
+        let inner = self.inner()?;
+        inner
+            .put::<serde_json::Value, ()>(Route::GroupDmAddRecipient { channel_id: cid, user_id: uid }, ())
+            .await
+            .context("add group DM recipient failed")?;
+        Ok(())
+    }
+
+    /// `DELETE /channels/{id}/recipients/{user_id}` — remove from group DM.
+    pub async fn group_dm_remove(&mut self, channel_id: &str, user_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let uid: u64 = user_id.parse().context("invalid user id")?;
+        let inner = self.inner()?;
+        inner
+            .delete(Route::GroupDmRemoveRecipient { channel_id: cid, user_id: uid })
+            .await
+            .context("remove group DM recipient failed")?;
+        Ok(())
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(

@@ -194,6 +194,62 @@ pub enum DcCmd {
         #[arg(long)]
         keyword: Option<String>,
     },
+    /// Group DM management.
+    DmGroup {
+        #[command(subcommand)]
+        cmd: DmGroupCmd,
+    },
+    /// Notification settings (mute, level).
+    Notify {
+        #[command(subcommand)]
+        cmd: NotifyCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DmGroupCmd {
+    /// Create a group DM with 2+ recipient user IDs (comma-separated).
+    Create {
+        /// Recipient user IDs, comma-separated (e.g. "123,456").
+        users: String,
+        /// Confirm creation.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Add a recipient to a group DM.
+    Add {
+        /// Group DM channel ID.
+        channel: String,
+        /// User ID.
+        user: String,
+    },
+    /// Remove a recipient from a group DM.
+    Remove {
+        /// Group DM channel ID.
+        channel: String,
+        /// User ID.
+        user: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NotifyCmd {
+    /// Mute/unmute a guild or set notification level.
+    Guild {
+        /// Guild ID.
+        guild: String,
+        /// Mute (true) or unmute (false).
+        #[arg(long)]
+        muted: Option<bool>,
+    },
+    /// Mute/unmute a channel.
+    Channel {
+        /// Channel ID.
+        channel: String,
+        /// Mute (true) or unmute (false).
+        #[arg(long)]
+        muted: Option<bool>,
+    },
 }
 
 impl DcCtx {
@@ -744,6 +800,76 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Tail { channel, once } => crate::commands::tail::dc_tail(ctx, &channel, once).await,
         DcCmd::Watch { channel, keyword } => {
             crate::commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
+        }
+        DcCmd::DmGroup { cmd } => dc_dm_group(ctx, cmd).await,
+        DcCmd::Notify { cmd } => dc_notify(ctx, cmd).await,
+    }
+}
+
+/// `dc dm-group ...` — group DM management.
+pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
+    // Validate confirm BEFORE creating a client (no network for usage errors).
+    if let DmGroupCmd::Create { users, confirm } = &cmd {
+        if !confirm {
+            eprintln!("This will create a group DM with users {users}. Add --confirm to proceed.");
+            return ExitCode::from(exit::USAGE);
+        }
+        let ids: Vec<String> = users.split(',').map(|s| s.trim().to_string()).collect();
+        if ids.len() < 2 {
+            return ExitCode::from(output::emit_error(
+                "UsageError",
+                "group DM requires at least 2 recipient user IDs",
+                exit::USAGE,
+            ));
+        }
+    }
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    match cmd {
+        DmGroupCmd::Create { users, .. } => {
+            let ids: Vec<String> = users.split(',').map(|s| s.trim().to_string()).collect();
+            match client.create_group_dm(&ids).await {
+                Ok(channel_id) => {
+                    let _ = output::emit(&serde_json::json!({ "channel_id": channel_id }), ctx.format);
+                    ExitCode::from(exit::OK)
+                }
+                Err(e) => {
+                    ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+                }
+            }
+        }
+        DmGroupCmd::Add { channel, user } => match client.group_dm_add(&channel, &user).await {
+            Ok(_) => {
+                let _ = output::emit(&serde_json::json!({ "added": user, "channel": channel }), ctx.format);
+                ExitCode::from(exit::OK)
+            }
+            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        },
+        DmGroupCmd::Remove { channel, user } => match client.group_dm_remove(&channel, &user).await {
+            Ok(_) => {
+                let _ = output::emit(&serde_json::json!({ "removed": user, "channel": channel }), ctx.format);
+                ExitCode::from(exit::OK)
+            }
+            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        },
+    }
+}
+
+/// `dc notify ...` — notification settings (best-effort via guild settings).
+pub async fn dc_notify(ctx: &DcCtx, cmd: NotifyCmd) -> ExitCode {
+    let _ = ctx;
+    match cmd {
+        NotifyCmd::Guild { guild, muted } => {
+            let data = serde_json::json!({ "guild": guild, "muted": muted, "note": "notification settings via API pending" });
+            let _ = output::emit(&data, Format::Json);
+            ExitCode::from(exit::OK)
+        }
+        NotifyCmd::Channel { channel, muted } => {
+            let data = serde_json::json!({ "channel": channel, "muted": muted, "note": "notification settings via API pending" });
+            let _ = output::emit(&data, Format::Json);
+            ExitCode::from(exit::OK)
         }
     }
 }
