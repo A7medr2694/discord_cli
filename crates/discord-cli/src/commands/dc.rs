@@ -133,6 +133,36 @@ pub enum DcCmd {
         #[arg(long)]
         confirm: bool,
     },
+    /// Add a reaction.
+    React {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Emoji (unicode or :name:).
+        emoji: String,
+    },
+    /// Remove own reaction.
+    Unreact {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Emoji.
+        emoji: String,
+    },
+    /// Pin a message.
+    Pin {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+    },
+    /// List pinned messages.
+    Pins {
+        /// Channel name or ID.
+        channel: String,
+    },
 }
 
 impl DcCtx {
@@ -509,6 +539,82 @@ pub async fn dc_delete(ctx: &DcCtx, channel: &str, message_id: &str, confirm: bo
     }
 }
 
+/// `dc react <CHANNEL> <MSG> <EMOJI>`
+pub async fn dc_react(ctx: &DcCtx, channel: &str, message_id: &str, emoji: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.add_reaction(&channel_id, message_id, emoji).await {
+        Ok(_) => {
+            let _ = output::emit(&serde_json::json!({ "reacted": true }), ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc unreact <CHANNEL> <MSG> <EMOJI>`
+pub async fn dc_unreact(ctx: &DcCtx, channel: &str, message_id: &str, emoji: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.remove_reaction(&channel_id, message_id, emoji).await {
+        Ok(_) => {
+            let _ = output::emit(&serde_json::json!({ "unreacted": true }), ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc pin <CHANNEL> <MSG>`
+pub async fn dc_pin(ctx: &DcCtx, channel: &str, message_id: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.pin_message(&channel_id, message_id).await {
+        Ok(_) => {
+            let _ = output::emit(&serde_json::json!({ "pinned": true }), ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc pins <CHANNEL>`
+pub async fn dc_pins(ctx: &DcCtx, channel: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.pinned_messages(&channel_id).await {
+        Ok(pins) => {
+            let _ = output::emit(&pins, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -539,5 +645,13 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Delete { channel, message_id, confirm } => {
             dc_delete(ctx, &channel, &message_id, confirm).await
         }
+        DcCmd::React { channel, message_id, emoji } => {
+            dc_react(ctx, &channel, &message_id, &emoji).await
+        }
+        DcCmd::Unreact { channel, message_id, emoji } => {
+            dc_unreact(ctx, &channel, &message_id, &emoji).await
+        }
+        DcCmd::Pin { channel, message_id } => dc_pin(ctx, &channel, &message_id).await,
+        DcCmd::Pins { channel } => dc_pins(ctx, &channel).await,
     }
 }

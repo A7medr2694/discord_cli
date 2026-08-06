@@ -388,6 +388,74 @@ impl ApiClient {
         Ok(())
     }
 
+    /// `PUT /channels/{id}/messages/{mid}/reactions/{emoji}/@me` — react.
+    pub async fn add_reaction(&mut self, channel_id: &str, message_id: &str, emoji: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        inner
+            .put::<serde_json::Value, ()>(Route::AddReaction { channel_id: cid, message_id: mid, emoji }, ())
+            .await
+            .context("react failed")?;
+        Ok(())
+    }
+
+    /// `DELETE .../reactions/{emoji}/@me` — remove own reaction.
+    pub async fn remove_reaction(&mut self, channel_id: &str, message_id: &str, emoji: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        inner
+            .delete(Route::RemoveOwnReaction { channel_id: cid, message_id: mid, emoji })
+            .await
+            .context("unreact failed")?;
+        Ok(())
+    }
+
+    /// `PUT /channels/{id}/pins/{mid}` — pin a message.
+    pub async fn pin_message(&mut self, channel_id: &str, message_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        inner
+            .put::<serde_json::Value, ()>(Route::PinMessage { channel_id: cid, message_id: mid }, ())
+            .await
+            .context("pin failed")?;
+        Ok(())
+    }
+
+    /// `DELETE /channels/{id}/pins/{mid}` — unpin a message.
+    pub async fn unpin_message(&mut self, channel_id: &str, message_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        inner
+            .delete(Route::UnpinMessage { channel_id: cid, message_id: mid })
+            .await
+            .context("unpin failed")?;
+        Ok(())
+    }
+
+    /// `GET /channels/{id}/pins` — list pinned messages.
+    pub async fn pinned_messages(&mut self, channel_id: &str) -> Result<Vec<crate::types::Message>> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let raw: Vec<RawMessage> = inner.get(Route::GetPins { channel_id: cid }).await.context("GET pins failed")?;
+        Ok(raw
+            .into_iter()
+            .map(|m| crate::types::Message {
+                message_id: m.id.to_string(),
+                channel_id: channel_id.to_string(),
+                guild_id: None,
+                author_id: Some(m.author.id.to_string()),
+                author: m.author.username,
+                timestamp: m.timestamp,
+                content: m.content,
+                attachments: None,
+            })
+            .collect())
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
