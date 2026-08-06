@@ -165,6 +165,112 @@ pub fn update_sync_state(
     Ok(())
 }
 
+/// Recent messages (newest first), optionally filtered by channel + hours.
+pub fn recent_messages(
+    conn: &Connection,
+    channel_name: Option<&str>,
+    hours: Option<i64>,
+    limit: i64,
+) -> Result<Vec<crate::SearchHit>> {
+    let mut sql = String::from(
+        r#"
+        SELECT m.id, m.channel_id, c.name, COALESCE(g.name,'DM'), m.author_name,
+               m.content, m.timestamp, 0.0
+        FROM messages m
+        JOIN channels c ON m.channel_id = c.id
+        LEFT JOIN guilds g ON m.guild_id = g.id
+        WHERE 1=1
+        "#,
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    if let Some(ch) = channel_name {
+        sql.push_str(" AND c.name = ?");
+        params.push(Box::new(ch.to_string()));
+    }
+    if let Some(h) = hours {
+        sql.push_str(" AND m.timestamp >= datetime('now', ?)");
+        params.push(Box::new(format!("-{} hours", h)));
+    }
+    sql.push_str(" ORDER BY m.timestamp DESC LIMIT ?");
+    params.push(Box::new(limit));
+
+    let mut stmt = conn.prepare(&sql).context("prepare recent")?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(crate::SearchHit {
+            id: row.get(0)?,
+            channel_id: row.get(1)?,
+            channel_name: row.get(2)?,
+            guild_name: row.get(3)?,
+            author_name: row.get(4)?,
+            content: row.get(5)?,
+            timestamp: row.get(6)?,
+            rank: row.get(7)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Per-channel message counts (stats).
+pub fn channel_stats(conn: &Connection) -> Result<Vec<crate::ChannelStat>> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT c.name, COALESCE(g.name,'DM'), COUNT(*)
+        FROM messages m
+        JOIN channels c ON m.channel_id = c.id
+        LEFT JOIN guilds g ON m.guild_id = g.id
+        GROUP BY m.channel_id
+        ORDER BY COUNT(*) DESC
+        "#,
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(crate::ChannelStat {
+            channel_name: row.get(0)?,
+            guild_name: row.get(1)?,
+            message_count: row.get(2)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+/// Top senders in a channel (or globally).
+pub fn top_senders(conn: &Connection, channel_name: Option<&str>, limit: i64) -> Result<Vec<crate::TopSender>> {
+    let mut sql = String::from(
+        r#"
+        SELECT author_name, COUNT(*) AS cnt
+        FROM messages m
+        JOIN channels c ON m.channel_id = c.id
+        WHERE 1=1
+        "#,
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    if let Some(ch) = channel_name {
+        sql.push_str(" AND c.name = ?");
+        params.push(Box::new(ch.to_string()));
+    }
+    sql.push_str(" GROUP BY author_name ORDER BY cnt DESC LIMIT ?");
+    params.push(Box::new(limit));
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(crate::TopSender {
+            author_name: row.get(0)?,
+            message_count: row.get(1)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
 /// FTS5 full-text search over stored messages (langkurt SQL, bind verbatim).
 pub fn search_messages(
     conn: &Connection,

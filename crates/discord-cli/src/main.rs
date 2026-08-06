@@ -59,6 +59,40 @@ enum Command {
         #[command(subcommand)]
         cmd: DcCmd,
     },
+    /// FTS5 search of the local SQLite archive.
+    Search {
+        /// Keyword to search.
+        keyword: String,
+        /// Filter by channel name.
+        #[arg(short, long)]
+        channel: Option<String>,
+        /// Max results (default 50).
+        #[arg(short, long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Recent stored messages.
+    Recent {
+        /// Filter by channel name.
+        #[arg(short, long)]
+        channel: Option<String>,
+        /// Only messages from the last N hours.
+        #[arg(long)]
+        hours: Option<i64>,
+        /// Max results (default 50).
+        #[arg(short, long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Per-channel message counts.
+    Stats,
+    /// Top senders.
+    Top {
+        /// Filter by channel name.
+        #[arg(short, long)]
+        channel: Option<String>,
+        /// Max senders (default 10).
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
 }
 
 fn main() -> ExitCode {
@@ -97,6 +131,16 @@ async fn run() -> ExitCode {
                 format,
             };
             commands::dc::dispatch(&ctx, cmd).await
+        }
+        Some(Command::Search { keyword, channel, limit }) => {
+            commands::local::cmd_search(&keyword, channel.as_deref(), limit, format)
+        }
+        Some(Command::Recent { channel, hours, limit }) => {
+            commands::local::cmd_recent(channel.as_deref(), hours, limit, format)
+        }
+        Some(Command::Stats) => commands::local::cmd_stats(format),
+        Some(Command::Top { channel, limit }) => {
+            commands::local::cmd_top(channel.as_deref(), limit, format)
         }
         None => {
             // No subcommand: print help.

@@ -1,5 +1,7 @@
 //! discord-db: SQLite archive for Discord messages.
 
+use serde::Serialize;
+
 pub mod db;
 
 /// A row in the `messages` table.
@@ -18,7 +20,7 @@ pub struct MessageRow {
 }
 
 /// A full-text search hit (FTS5 join result).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SearchHit {
     pub id: String,
     pub channel_id: String,
@@ -28,4 +30,19 @@ pub struct SearchHit {
     pub content: String,
     pub timestamp: String,
     pub rank: f64,
+}
+
+/// Per-channel message count (stats).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ChannelStat {
+    pub channel_name: String,
+    pub guild_name: String,
+    pub message_count: i64,
+}
+
+/// Top sender aggregate.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TopSender {
+    pub author_name: String,
+    pub message_count: i64,
 }
