@@ -19,6 +19,10 @@ pub async fn sync_channel(
     let db_path = config::db_path()?;
     let conn = ddb::open(db_path.to_str().unwrap_or("discord.db"))?;
 
+    // Ensure the channel exists in the DB first (foreign-key requirement).
+    // Upsert channel with a placeholder name; the archive query joins on it.
+    ddb::upsert_channel(&conn, channel_id, None, channel_id, 0, None, None)?;
+
     let (last_id, oldest_id) = ddb::get_sync_state(&conn, channel_id)?;
     let mut total = 0usize;
 

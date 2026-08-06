@@ -25,30 +25,30 @@ echo "  OK"
 echo "=== 2. whoami (profile) ==="
 "$BIN" whoami --json || { echo "[FAIL] whoami"; exit 1; }
 
-echo "=== 3. dc guilds (list servers) ==="
-"$BIN" dc guilds --json || { echo "[FAIL] guilds"; exit 1; }
+echo "=== 3. guilds (list servers) ==="
+"$BIN" guilds --json || { echo "[FAIL] guilds"; exit 1; }
 
-echo "=== 4. dc dms (list DMs) ==="
-"$BIN" dc dms --json || { echo "[WARN] dms (may be empty)"; }
+echo "=== 4. dms (list DMs) ==="
+"$BIN" dms --json || { echo "[WARN] dms (may be empty)"; }
 
-echo "=== 5. dc channels (first guild) ==="
-FIRST_GUILD=$("$BIN" dc guilds --json | head -1 | grep -o '"id":"[0-9]*"' | head -1 | cut -d'"' -f4)
+echo "=== 5. channels (first guild) ==="
+FIRST_GUILD=$("$BIN" guilds --json | head -1 | grep -o '"id":"[0-9]*"' | head -1 | cut -d'"' -f4)
 if [ -n "$FIRST_GUILD" ]; then
-  "$BIN" dc channels "$FIRST_GUILD" --json || echo "[WARN] channels"
+  "$BIN" channels "$FIRST_GUILD" --json || echo "[WARN] channels"
 else
   echo "[SKIP] no guilds"
 fi
 
 if [ "$SKIP_SEND" != "--skip-send" ]; then
-  echo "=== 6. dc send --dry-run (preview, no actual send) ==="
-  "$BIN" dc send 0 --text "e2e dry run" --dry-run || { echo "[FAIL] dry-run"; exit 1; }
+  echo "=== 6. send --dry-run (preview, no actual send) ==="
+  "$BIN" send 0 --text "e2e dry run" --dry-run || { echo "[FAIL] dry-run"; exit 1; }
   echo "  (dry-run only — no message actually sent)"
 else
   echo "[SKIP] send"
 fi
 
-echo "=== 7. dc sync-all --limit 20 (bounded, local archive) ==="
-"$BIN" dc sync-all --limit 20 || echo "[WARN] sync-all (may need channels)"
+echo "=== 7. sync-all --limit 20 (bounded, local archive) ==="
+"$BIN" sync-all --limit 20 || echo "[WARN] sync-all (may need channels)"
 
 echo
 echo "=== E2E PASS ==="

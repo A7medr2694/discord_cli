@@ -24,28 +24,28 @@ A Rust CLI + MCP server that operates a **user** Discord account (self-bot style
 
 ### "Summarize a channel"
 ```
-discord dc read <CHANNEL> -n 200 --json   # fetch recent messages
-discord dc sync <CHANNEL> -n 2000         # archive for offline search
-discord search "deploy" -n 50             # find mentions offline
+discord read <CHANNEL> -l 200 --json   # fetch recent messages
+discord sync <CHANNEL> -l 2000         # archive for offline search
+discord search "deploy" -n 50            # find mentions offline
 ```
 Then synthesize the JSON into a summary. Prefer `--json` output (machine-readable).
 
 ### "What can I see?"
 ```
-discord dc guilds --json
-discord dc channels <GUILD> --json
-discord dc dms --json
+discord guilds --json
+discord channels <GUILD> --json
+discord dms --json
 ```
 
 ### "Reply to someone"
 ```
-discord dc send <CHANNEL> --text "..." --reply <MSG_ID>   # reply is auto-approved
-discord dc send <CHANNEL> --text "..." --confirm          # new message needs --confirm
+discord send <CHANNEL> --text "..." --reply <MSG_ID>   # reply is auto-approved
+discord send <CHANNEL> --text "..." --confirm          # new message needs --confirm
 ```
 
 ### "Watch for keywords"
 ```
-discord dc watch --keyword "bug" --jsonl    # stream matching messages as JSONL
+discord watch --keyword "bug" --jsonl    # stream matching messages as JSONL
 ```
 
 ## MCP mode

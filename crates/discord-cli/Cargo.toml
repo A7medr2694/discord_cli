@@ -9,6 +9,8 @@ description = "Discord CLI binary: commands for AI agents (user-token)"
 name = "discord"
 path = "src/main.rs"
 
+# The `dc` binary was the old name; now the single binary is `discord`.
+
 [dependencies]
 tokio.workspace = true
 clap.workspace = true

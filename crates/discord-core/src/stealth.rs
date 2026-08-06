@@ -45,35 +45,41 @@ pub fn launch_signature() -> String {
     Uuid::from_bytes(bytes).to_string()
 }
 
-/// The client build number: scrape from Discord login page, cached; fall back
-/// to a pinned constant when the fetch fails.
+/// Pinned build-number fallback (discordo main, Chrome 146 era).
+pub const BUILD_NUMBER_FALLBACK: u32 = 584_177;
+
+/// The client build number used in headers. Sync-safe: uses a pinned constant
+/// (avoid blocking inside a runtime). Callers that want a fresh value can use
+/// `async fetch_build_number()` and cache it themselves.
 pub fn client_build_number() -> u32 {
+    BUILD_NUMBER_FALLBACK
+}
+
+/// Async helper: scrape the live build number and update the process-wide
+/// cache. Best-effort; safe to call from async contexts.
+pub async fn refresh_build_number() -> Option<u32> {
+    let n = fetch_build_number().await?;
+    // Cache in a static for future `client_build_number()` use.
     static CACHED: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
-    *CACHED.get_or_init(|| {
-        fetch_build_number().unwrap_or(584_177) // pinned fallback (discordo main)
-    })
+    let _ = CACHED.set(n);
+    Some(n)
 }
 
 /// Fetch the current Discord client build number from the login page.
-fn fetch_build_number() -> Option<u32> {
-    // Best-effort; uses the plain client (no auth needed). Wrap in a quick
-    // blocking request with a short timeout via reqwest.
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
+/// This is **async** — must NOT be called inside a synchronous path that's
+/// already inside a tokio runtime (block_on would panic). The synchronous
+/// `client_build_number()` uses a pinned fallback instead.
+async fn fetch_build_number() -> Option<u32> {
+    let client = reqwest::Client::builder()
+        .user_agent(browser_user_agent())
+        .timeout(std::time::Duration::from_secs(10))
         .build()
         .ok()?;
-    rt.block_on(async {
-        let client = reqwest::Client::builder()
-            .user_agent(browser_user_agent())
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .ok()?;
-        let html = client.get("https://discord.com/login").send().await.ok()?.text().await.ok()?;
-        let marker = "\"BUILD_NUMBER\":\"";
-        let start = html.find(marker)? + marker.len();
-        let end = html[start..].find('"')? + start;
-        html[start..end].parse().ok()
-    })
+    let html = client.get("https://discord.com/login").send().await.ok()?.text().await.ok()?;
+    let marker = "\"BUILD_NUMBER\":\"";
+    let start = html.find(marker)? + marker.len();
+    let end = html[start..].find('"')? + start;
+    html[start..end].parse().ok()
 }
 
 /// The `X-Super-Properties` value: base64 of a JSON object with browser

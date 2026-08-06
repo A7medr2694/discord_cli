@@ -14,10 +14,10 @@ A Discord **bot** can only read channels it is invited to. A **user token** read
 
 ## Features
 
-- **Read anything**: `dc guilds`, `dc channels`, `dc dms` (DM + group-DM), `dc history`, `dc read`, `dc members`, `dc info`, `dc search` (native), `dc threads` (with user-token fallback), `dc roles`, `dc profile`, `dc relationships`, `dc pins`
-- **Send / act**: `dc send` (with `--confirm` safety), `dc edit`, `dc delete`, `dc react`, `dc pin`, `dc dm-group` (create/add/remove), `dc notify`
-- **Archive offline**: `dc sync` / `dc sync-all` → SQLite + FTS5 full-text search, then `search`, `recent`, `stats`, `top`, `export`, `purge`
-- **Live**: `dc tail` / `dc watch` — JSONL streams over the gateway (invisible presence)
+- **Read anything**: `guilds`, `channels`, `dms` (DM + group-DM), `history`, `read`, `members`, `info`, `guild-search` (native), `threads` (with user-token fallback), `roles`, `profile`, `relationships`, `pins`
+- **Send / act**: `send` (with `--confirm` safety), `edit`, `delete`, `react`, `pin`, `dm-group` (create/add/remove), `notify`
+- **Archive offline**: `sync` / `sync-all` → SQLite + FTS5 full-text search, then `search`, `recent`, `stats`, `top`, `export`, `purge`
+- **Live**: `tail` / `watch` — JSONL streams over the gateway (invisible presence)
 - **AI-ready**: `serve` starts an **MCP server** (stdio) exposing 11 tools; all commands emit **JSONL/JSON/YAML** with a stable envelope
 - **Stealth**: browser UA + `X-Super-Properties` + `launch_signature` mask + per-install `device_id`
 
@@ -42,22 +42,22 @@ discord status
 discord whoami
 
 # 3. Explore
-discord dc guilds
-discord dc channels <GUILD>
-discord dc dms
+discord guilds
+discord channels <GUILD>
+discord dms
 
 # 4. Read a channel (agent-facing)
-discord dc read <CHANNEL> -n 50 --json
+discord read <CHANNEL> -l 50 --json
 
 # 5. Archive + search offline
-discord dc sync-all -n 200
+discord sync-all -l 200
 discord search "keyword"
 discord recent --hours 24
 discord stats
 discord top
 
 # 6. Live follow
-discord dc watch --channel <ID> --keyword "deploy"
+discord watch --channel <ID> --keyword "deploy"
 ```
 
 ## Output contract

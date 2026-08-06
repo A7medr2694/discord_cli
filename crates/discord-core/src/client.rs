@@ -69,7 +69,10 @@ impl ApiClient {
         let raw: Vec<RawGuild> = inner
             .get(Route::GetCurrentUserGuilds)
             .await
-            .context("GET /users/@me/guilds failed")?;
+            .map_err(|e| {
+                // Surface the inner error chain (Debug) for troubleshooting.
+                anyhow::anyhow!("GET /users/@me/guilds failed: {:?}", e)
+            })?;
         Ok(raw
             .into_iter()
             .map(|g| Guild {
@@ -555,9 +558,9 @@ impl ApiClient {
             .await;
 
             if after.is_some() {
-                cur_after = Some(msgs[0].id);
+                cur_after = msgs[0].id.parse().ok();
             } else {
-                cur_before = Some(msgs[n - 1].id);
+                cur_before = msgs[n - 1].id.parse().ok();
             }
             all.extend(msgs);
             if n < batch as usize {
@@ -566,7 +569,7 @@ impl ApiClient {
         }
 
         // Sort ascending by id (jackwener sorts by msg_id ascending).
-        all.sort_by_key(|m| m.id);
+        all.sort_by_key(|m| m.id.clone());
         Ok(all
             .into_iter()
             .map(|m| crate::types::Message {
@@ -593,7 +596,7 @@ fn randish() -> u64 {
 /// Raw Discord response shapes (subset we consume).
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawGuild {
-    id: u64,
+    id: String,
     name: String,
     #[serde(default)]
     icon: Option<String>,
@@ -603,7 +606,7 @@ struct RawGuild {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawChannel {
-    id: u64,
+    id: String,
     #[serde(default)]
     name: Option<String>,
     #[serde(rename = "type")]
@@ -611,14 +614,14 @@ struct RawChannel {
     #[serde(default)]
     topic: Option<String>,
     #[serde(default)]
-    parent_id: Option<u64>,
+    parent_id: Option<String>,
     #[serde(default)]
     position: i32,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawMessage {
-    id: u64,
+    id: String,
     author: RawAuthor,
     content: String,
     timestamp: String,
@@ -626,7 +629,7 @@ struct RawMessage {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawAuthor {
-    id: u64,
+    id: String,
     username: String,
 }
 
@@ -637,8 +640,8 @@ struct SearchResponse {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawSearchMessage {
-    id: u64,
-    channel_id: u64,
+    id: String,
+    channel_id: String,
     author: RawAuthor,
     content: String,
     timestamp: String,
@@ -646,7 +649,7 @@ struct RawSearchMessage {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawRole {
-    id: u64,
+    id: String,
     name: String,
     #[serde(default)]
     color: u32,
@@ -658,7 +661,7 @@ struct RawRole {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawRelationship {
-    id: u64,
+    id: String,
     #[serde(rename = "type")]
     relationship_type: u8,
     #[serde(default)]
@@ -674,7 +677,7 @@ struct RawUserProfile {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawProfileUser {
-    id: u64,
+    id: String,
     username: String,
     #[serde(default)]
     global_name: Option<String>,
@@ -696,12 +699,12 @@ struct ThreadSearchResponse {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawThread {
-    id: u64,
+    id: String,
     name: String,
     #[serde(rename = "type")]
     channel_type: u8,
     #[serde(default)]
-    parent_id: Option<u64>,
+    parent_id: Option<String>,
     #[serde(default)]
     position: i32,
 }
@@ -727,7 +730,7 @@ struct RawMember {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawMemberUser {
-    id: u64,
+    id: String,
     username: String,
     #[serde(default)]
     global_name: Option<String>,
@@ -737,7 +740,7 @@ struct RawMemberUser {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawGuildInfo {
-    id: u64,
+    id: String,
     name: String,
     #[serde(default)]
     description: Option<String>,
@@ -749,7 +752,7 @@ struct RawGuildInfo {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawDm {
-    id: u64,
+    id: String,
     #[serde(rename = "type")]
     channel_type: u8,
     #[serde(default)]
@@ -760,7 +763,7 @@ struct RawDm {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RawDmUser {
-    id: u64,
+    id: String,
     username: String,
     #[serde(default)]
     discriminator: Option<String>,

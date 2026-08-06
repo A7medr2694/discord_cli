@@ -13,7 +13,7 @@ use discord_core::client::ApiClient;
 use discord_core::config::load_env;
 use discord_core::output::{self, Format, exit};
 
-use commands::dc::{DcCmd, DcCtx};
+use commands::dc::{DcCtx, DmGroupCmd, NotifyCmd};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -54,10 +54,190 @@ enum Command {
     Status,
     /// Show the authenticated user's profile.
     Whoami,
-    /// Discord operations — list guilds/channels, read messages, etc.
-    Dc {
+    /// List joined guilds (name/id/icon/owner).
+    Guilds,
+    /// List text/announcement/forum channels of a guild.
+    Channels {
+        /// Guild name or ID.
+        guild: String,
+    },
+    /// List DM + group-DM channels.
+    Dms,
+    /// Fetch message history of a channel (paginated).
+    History {
+        /// Channel name or ID.
+        channel: String,
+        /// Max messages to fetch (default 1000).
+        #[arg(short, long, default_value_t = 1000)]
+        limit: usize,
+        /// Fetch messages before this snowflake.
+        #[arg(long)]
+        before: Option<u64>,
+        /// Fetch messages after this snowflake.
+        #[arg(long)]
+        after: Option<u64>,
+    },
+    /// Read recent messages (default 50) — the key AI-facing read.
+    Read {
+        /// Channel name or ID.
+        channel: String,
+        /// Max messages (default 50).
+        #[arg(short, long, default_value_t = 50)]
+        limit: usize,
+        /// Fetch messages before this snowflake.
+        #[arg(long)]
+        before: Option<u64>,
+    },
+    /// List guild members.
+    Members {
+        /// Guild name or ID.
+        guild: String,
+        /// Max members (default 50).
+        #[arg(long, default_value_t = 50)]
+        max: u32,
+    },
+    /// Show guild info (name, member counts).
+    Info {
+        /// Guild name or ID.
+        guild: String,
+    },
+    /// Discord native search within a guild.
+    GuildSearch {
+        /// Guild name or ID.
+        guild: String,
+        /// Search query.
+        query: String,
+        /// Restrict to a channel name or ID.
+        #[arg(short, long)]
+        channel: Option<String>,
+        /// Max results (default 25).
+        #[arg(short, long, default_value_t = 25)]
+        limit: u32,
+    },
+    /// List guild roles (sorted by position).
+    Roles {
+        /// Guild name or ID.
+        guild: String,
+    },
+    /// Show a user's profile (default: self).
+    Profile {
+        /// User ID (default: current user).
+        user_id: Option<String>,
+    },
+    /// Show friends/blocked/pending relationships.
+    Relationships,
+    /// List active threads in a channel (user-token fallback).
+    Threads {
+        /// Channel name or ID.
+        channel: String,
+    },
+    /// Send a message (requires --confirm unless --reply/--dry-run).
+    Send {
+        /// Channel name or ID.
+        channel: String,
+        /// Message content.
+        #[arg(long)]
+        text: String,
+        /// Reply to a message id.
+        #[arg(long)]
+        reply: Option<String>,
+        /// Confirm a non-reply send (never interactive).
+        #[arg(long)]
+        confirm: bool,
+        /// Preview what would be sent without sending.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Edit an own message.
+    Edit {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// New content.
+        #[arg(long)]
+        text: String,
+    },
+    /// Delete an own message (requires --confirm).
+    Delete {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Add a reaction.
+    React {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Emoji (unicode or :name:).
+        emoji: String,
+    },
+    /// Remove own reaction.
+    Unreact {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Emoji.
+        emoji: String,
+    },
+    /// Pin a message.
+    Pin {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+    },
+    /// List pinned messages.
+    Pins {
+        /// Channel name or ID.
+        channel: String,
+    },
+    /// Incrementally sync a channel's history to SQLite.
+    Sync {
+        /// Channel name or ID.
+        channel: String,
+        /// Max messages (default 5000).
+        #[arg(short, long, default_value_t = 5000)]
+        limit: usize,
+    },
+    /// Discover and sync all accessible text channels (bounded).
+    SyncAll {
+        /// Per-channel cap (default 200).
+        #[arg(short, long, default_value_t = 200)]
+        limit: usize,
+    },
+    /// Follow new messages live (gateway, invisible presence).
+    Tail {
+        /// Channel ID (empty = all channels).
+        channel: String,
+        /// Fetch once and exit after a short listen.
+        #[arg(long)]
+        once: bool,
+    },
+    /// Long-running JSONL stream for agents (optional filters).
+    Watch {
+        /// Only stream this channel ID.
+        #[arg(long)]
+        channel: Option<String>,
+        /// Only stream messages containing this keyword.
+        #[arg(long)]
+        keyword: Option<String>,
+    },
+    /// Group DM management.
+    DmGroup {
         #[command(subcommand)]
-        cmd: DcCmd,
+        cmd: DmGroupCmd,
+    },
+    /// Notification settings (mute, level).
+    Notify {
+        #[command(subcommand)]
+        cmd: NotifyCmd,
     },
     /// FTS5 search of the local SQLite archive.
     Search {
@@ -152,16 +332,63 @@ async fn run() -> ExitCode {
         // Output stays plain; no color lib in core yet.
     }
 
+    // Build a DcCtx for the discord operations (share token + format).
+    let dcctx = DcCtx {
+        token: cli.token.clone(),
+        format,
+    };
+    let ctx = &dcctx;
+
     match cli.command {
         Some(Command::Status) => cmd_status(&cli, format).await,
         Some(Command::Whoami) => cmd_whoami(&cli, format).await,
-        Some(Command::Dc { cmd }) => {
-            let ctx = DcCtx {
-                token: cli.token.clone(),
-                format,
-            };
-            commands::dc::dispatch(&ctx, cmd).await
+        Some(Command::Guilds) => commands::dc::dc_guilds(ctx).await,
+        Some(Command::Channels { guild }) => commands::dc::dc_channels(ctx, &guild).await,
+        Some(Command::Dms) => commands::dc::dc_dms(ctx).await,
+        Some(Command::History { channel, limit, before, after }) => {
+            commands::dc::dc_history(ctx, &channel, limit, before, after).await
         }
+        Some(Command::Read { channel, limit, before }) => {
+            commands::dc::dc_read(ctx, &channel, limit, before).await
+        }
+        Some(Command::Members { guild, max }) => commands::dc::dc_members(ctx, &guild, max).await,
+        Some(Command::Info { guild }) => commands::dc::dc_info(ctx, &guild).await,
+        Some(Command::GuildSearch { guild, query, channel, limit }) => {
+            commands::dc::dc_search(ctx, &guild, &query, channel.as_deref(), limit).await
+        }
+        Some(Command::Roles { guild }) => commands::dc::dc_roles(ctx, &guild).await,
+        Some(Command::Profile { user_id }) => commands::dc::dc_profile(ctx, user_id.as_deref()).await,
+        Some(Command::Relationships) => commands::dc::dc_relationships(ctx).await,
+        Some(Command::Threads { channel }) => commands::dc::dc_threads(ctx, &channel).await,
+        Some(Command::Send { channel, text, reply, confirm, dry_run }) => {
+            commands::dc::dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await
+        }
+        Some(Command::Edit { channel, message_id, text }) => {
+            commands::dc::dc_edit(ctx, &channel, &message_id, &text).await
+        }
+        Some(Command::Delete { channel, message_id, confirm }) => {
+            commands::dc::dc_delete(ctx, &channel, &message_id, confirm).await
+        }
+        Some(Command::React { channel, message_id, emoji }) => {
+            commands::dc::dc_react(ctx, &channel, &message_id, &emoji).await
+        }
+        Some(Command::Unreact { channel, message_id, emoji }) => {
+            commands::dc::dc_unreact(ctx, &channel, &message_id, &emoji).await
+        }
+        Some(Command::Pin { channel, message_id }) => {
+            commands::dc::dc_pin(ctx, &channel, &message_id).await
+        }
+        Some(Command::Pins { channel }) => commands::dc::dc_pins(ctx, &channel).await,
+        Some(Command::Sync { channel, limit }) => commands::dc::dc_sync(ctx, &channel, limit).await,
+        Some(Command::SyncAll { limit }) => commands::dc::dc_sync_all(ctx, limit).await,
+        Some(Command::Tail { channel, once }) => {
+            commands::tail::dc_tail(ctx, &channel, once).await
+        }
+        Some(Command::Watch { channel, keyword }) => {
+            commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
+        }
+        Some(Command::DmGroup { cmd }) => commands::dc::dc_dm_group(ctx, cmd).await,
+        Some(Command::Notify { cmd }) => commands::dc::dc_notify(ctx, cmd).await,
         Some(Command::Search { keyword, channel, limit }) => {
             commands::local::cmd_search(&keyword, channel.as_deref(), limit, format)
         }
