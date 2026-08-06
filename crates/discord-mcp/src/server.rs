@@ -48,6 +48,9 @@ pub struct SendParams {
     /// Reply to this message ID.
     #[serde(default)]
     pub reply_to: Option<String>,
+    /// Local file paths to attach (server-side; max 10, each ≤10MiB).
+    #[serde(default)]
+    pub files: Option<Vec<String>>,
 }
 
 /// Get single message parameter.
@@ -161,16 +164,61 @@ impl DiscordMcpServer {
     }
 
     /// Send a message to a channel.
-    #[tool(description = "Send a message to a channel. Gate behind approval in client.")]
+    ///
+    /// If `files` is set, each path is read from the MCP server's local
+    /// filesystem and attached (max 10 files, each ≤10MiB). Note: the
+    /// `--confirm` gate is advisory here — approval is enforced by the MCP
+    /// client, not the server.
+    #[tool(
+        description = "Send a message to a channel, optionally with local file attachments. Gate behind approval in client (advisory server-side)."
+    )]
     pub async fn send_message(
         &self,
         Parameters(req): Parameters<SendParams>,
     ) -> Result<String, String> {
         let mut c = self.client()?;
-        let id = c
-            .send_message(&req.channel_id, &req.content, req.reply_to.as_deref())
-            .await
-            .map_err(|e| e.to_string())?;
+        let id = match req.files.as_deref() {
+            None => c
+                .send_message(&req.channel_id, &req.content, req.reply_to.as_deref())
+                .await
+                .map_err(|e| e.to_string())?,
+            Some(paths) => {
+                // Server-local attachment load (same caps as CLI: 10 files, 10MiB).
+                let mut atts = Vec::with_capacity(paths.len());
+                for path in paths {
+                    let data = std::fs::read(path)
+                        .map_err(|e| format!("cannot read file \"{path}\": {e}"))?;
+                    if data.len() > 10 * 1024 * 1024 {
+                        return Err(format!("file too large (>10MiB): {path}"));
+                    }
+                    let filename = std::path::Path::new(path)
+                        .file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| path.clone());
+                    let mime = mime_guess::from_path(path)
+                        .first_raw()
+                        .unwrap_or("application/octet-stream")
+                        .to_string();
+                    atts.push(discord_user::types::CreateAttachment {
+                        filename,
+                        data,
+                        mime_type: mime,
+                        description: None,
+                    });
+                }
+                if atts.len() > 10 {
+                    return Err("too many files: max 10 per message".into());
+                }
+                c.send_message_with_files(
+                    &req.channel_id,
+                    &req.content,
+                    req.reply_to.as_deref(),
+                    atts,
+                )
+                .await
+                .map_err(|e| e.to_string())?
+            }
+        };
         Ok(format!(r#"{{"message_id":"{id}"}}"#))
     }
 
