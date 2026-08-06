@@ -31,3 +31,23 @@ fn no_subcommand_shows_help_exit_0() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("Usage:"));
 }
+
+#[test]
+fn dc_guilds_without_token_exits_1() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "guilds"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1), "dc guilds must exit 1 without token");
+}
+
+#[test]
+fn dc_help_lists_subcommands() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("guilds"));
+    assert!(stdout.contains("channels"));
+}

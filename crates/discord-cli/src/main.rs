@@ -5,12 +5,15 @@
 
 use std::process::ExitCode;
 
+mod commands;
 mod resolve;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use discord_core::client::ApiClient;
 use discord_core::config::load_env;
 use discord_core::output::{self, Format, exit};
+
+use commands::dc::{DcCmd, DcCtx};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -51,6 +54,11 @@ enum Command {
     Status,
     /// Show the authenticated user's profile.
     Whoami,
+    /// Discord operations — list guilds/channels, read messages, etc.
+    Dc {
+        #[command(subcommand)]
+        cmd: DcCmd,
+    },
 }
 
 fn main() -> ExitCode {
@@ -69,7 +77,8 @@ fn main() -> ExitCode {
     run()
 }
 
-fn run() -> ExitCode {
+#[tokio::main]
+async fn run() -> ExitCode {
     load_env();
     let cli = Cli::parse();
     let format = output::resolve_format(cli.json, cli.yaml, cli.format.as_deref());
@@ -80,8 +89,15 @@ fn run() -> ExitCode {
     }
 
     match cli.command {
-        Some(Command::Status) => cmd_status(&cli, format),
-        Some(Command::Whoami) => cmd_whoami(&cli, format),
+        Some(Command::Status) => cmd_status(&cli, format).await,
+        Some(Command::Whoami) => cmd_whoami(&cli, format).await,
+        Some(Command::Dc { cmd }) => {
+            let ctx = DcCtx {
+                token: cli.token.clone(),
+                format,
+            };
+            commands::dc::dispatch(&ctx, cmd).await
+        }
         None => {
             // No subcommand: print help.
             let mut c = Cli::command();
@@ -92,7 +108,6 @@ fn run() -> ExitCode {
     }
 }
 
-#[tokio::main]
 async fn cmd_status(cli: &Cli, format: Format) -> ExitCode {
     let mut client = match ApiClient::from_env(cli.token.as_deref()) {
         Ok(c) => c,
@@ -119,7 +134,6 @@ async fn cmd_status(cli: &Cli, format: Format) -> ExitCode {
     }
 }
 
-#[tokio::main]
 async fn cmd_whoami(cli: &Cli, format: Format) -> ExitCode {
     let mut client = match ApiClient::from_env(cli.token.as_deref()) {
         Ok(c) => c,
