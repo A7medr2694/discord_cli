@@ -239,6 +239,9 @@ enum Command {
         /// Only stream messages containing this keyword.
         #[arg(long)]
         keyword: Option<String>,
+        /// Also emit typing-indicator events as JSONL.
+        #[arg(long)]
+        typing: bool,
     },
     /// Group DM management.
     DmGroup {
@@ -433,9 +436,11 @@ async fn run() -> ExitCode {
         Some(Command::Sync { channel, limit }) => commands::dc::dc_sync(ctx, &channel, limit).await,
         Some(Command::SyncAll { limit }) => commands::dc::dc_sync_all(ctx, limit).await,
         Some(Command::Tail { channel, once }) => commands::tail::dc_tail(ctx, &channel, once).await,
-        Some(Command::Watch { channel, keyword }) => {
-            commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
-        }
+        Some(Command::Watch {
+            channel,
+            keyword,
+            typing,
+        }) => commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref(), typing).await,
         Some(Command::DmGroup { cmd }) => commands::dc::dc_dm_group(ctx, cmd).await,
         Some(Command::Notify { cmd }) => commands::dc::dc_notify(ctx, cmd).await,
         Some(Command::Search {

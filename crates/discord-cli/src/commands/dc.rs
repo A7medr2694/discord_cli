@@ -204,6 +204,9 @@ pub enum DcCmd {
         /// Only stream messages containing this keyword.
         #[arg(long)]
         keyword: Option<String>,
+        /// Also emit typing-indicator events as JSONL.
+        #[arg(long)]
+        typing: bool,
     },
     /// Group DM management.
     DmGroup {
@@ -997,8 +1000,13 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Sync { channel, limit } => dc_sync(ctx, &channel, limit).await,
         DcCmd::SyncAll { limit } => dc_sync_all(ctx, limit).await,
         DcCmd::Tail { channel, once } => crate::commands::tail::dc_tail(ctx, &channel, once).await,
-        DcCmd::Watch { channel, keyword } => {
-            crate::commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref()).await
+        DcCmd::Watch {
+            channel,
+            keyword,
+            typing,
+        } => {
+            crate::commands::tail::dc_watch(ctx, channel.as_deref(), keyword.as_deref(), typing)
+                .await
         }
         DcCmd::DmGroup { cmd } => dc_dm_group(ctx, cmd).await,
         DcCmd::Notify { cmd } => dc_notify(ctx, cmd).await,

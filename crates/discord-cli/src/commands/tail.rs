@@ -18,8 +18,8 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
         }
     };
 
-    let mut client =
-        discord_user::DiscordUser::new(token).with_status(discord_user::UserStatus::Invisible); // never empty (renders online)
+    let mut client = discord_user::DiscordUser::new(token.clone())
+        .with_status(discord_user::UserStatus::Invisible); // never empty (renders online)
 
     if let Err(e) = client.init().await {
         return ExitCode::from(output::emit_error(
@@ -64,9 +64,15 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
     ExitCode::from(exit::OK)
 }
 
-/// `dc watch [--channel C] [--keyword K]` — long-running JSONL stream for agents.
-/// Streams MESSAGE_CREATE as JSONL with optional channel/keyword filters.
-pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>) -> ExitCode {
+/// `dc watch [--channel C] [--keyword K] [--typing]` — long-running JSONL
+/// stream for agents. Streams MESSAGE_CREATE as JSONL with optional
+/// channel/keyword filters; with `--typing` also emits TYPING_START events.
+pub async fn dc_watch(
+    ctx: &DcCtx,
+    channel: Option<&str>,
+    keyword: Option<&str>,
+    typing: bool,
+) -> ExitCode {
     let token = match discord_core::config::resolve_token(ctx.token.as_deref()) {
         Ok(t) => t,
         Err(e) => {
@@ -74,8 +80,8 @@ pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>)
         }
     };
 
-    let mut client =
-        discord_user::DiscordUser::new(token).with_status(discord_user::UserStatus::Invisible);
+    let mut client = discord_user::DiscordUser::new(token.clone())
+        .with_status(discord_user::UserStatus::Invisible);
 
     if let Err(e) = client.init().await {
         return ExitCode::from(output::emit_error(
@@ -87,9 +93,16 @@ pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>)
 
     let target_ch = channel.map(|s| s.to_string());
     let target_kw = keyword.map(|s| s.to_lowercase());
+    // Cache own user id once (skip self typing events).
+    let me_id = discord_core::client::ApiClient::with_token(token.clone())
+        .get_me()
+        .await
+        .ok()
+        .map(|me| me.id);
+    let msg_ch = target_ch.clone();
     let _sub = client
         .on_message_create(move |event| {
-            if let Some(c) = &target_ch {
+            if let Some(c) = &msg_ch {
                 if event.message.channel_id.as_str() != c {
                     return;
                 }
@@ -110,6 +123,34 @@ pub async fn dc_watch(ctx: &DcCtx, channel: Option<&str>, keyword: Option<&str>)
             println!("{}", serde_json::to_string(&line).unwrap_or_default());
         })
         .await;
+
+    // Optional typing-event stream (F2b): emit TYPING_START as JSONL,
+    // filtered to the target channel (empty = all) and skipping self.
+    if typing {
+        let tch = target_ch.clone();
+        let mid = me_id.clone();
+        let _tsub = client
+            .on_typing_start(move |event| {
+                if let Some(c) = &tch {
+                    if event.channel_id != *c {
+                        return;
+                    }
+                }
+                if let Some(me) = &mid {
+                    if &event.user_id == me {
+                        return;
+                    }
+                }
+                let line = serde_json::json!({
+                    "type": "typing",
+                    "channel_id": event.channel_id,
+                    "user_id": event.user_id,
+                    "timestamp": event.timestamp,
+                });
+                println!("{}", serde_json::to_string(&line).unwrap_or_default());
+            })
+            .await;
+    }
 
     tokio::signal::ctrl_c().await.ok();
     let _ = client.disconnect().await;

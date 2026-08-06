@@ -188,3 +188,13 @@ fn send_help_shows_typing_flag() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("--typing"), "stdout: {stdout}");
 }
+
+#[test]
+fn watch_help_shows_typing_flag() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["watch", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--typing"), "stdout: {stdout}");
+}
