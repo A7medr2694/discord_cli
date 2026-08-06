@@ -189,6 +189,100 @@ impl ApiClient {
         })
     }
 
+    /// `GET /guilds/{id}/messages/search?content=...` — Discord native search
+    /// (jackwener search_guild_messages). Returns matching messages.
+    pub async fn search_guild_messages(
+        &mut self,
+        guild_id: &str,
+        query: &str,
+        channel_id: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<crate::types::Message>> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let cid = channel_id.and_then(|c| c.parse().ok());
+        let inner = self.inner()?;
+        let raw: SearchResponse = inner
+            .get(Route::SearchGuildMessages {
+                guild_id: gid,
+                content: query,
+                channel_id: cid,
+                limit: Some(limit),
+            })
+            .await
+            .context("search failed")?;
+        let mut out = Vec::new();
+        for group in raw.messages {
+            for msg in group {
+                out.push(crate::types::Message {
+                    message_id: msg.id.to_string(),
+                    channel_id: msg.channel_id.to_string(),
+                    guild_id: Some(guild_id.to_string()),
+                    author_id: Some(msg.author.id.to_string()),
+                    author: msg.author.username,
+                    timestamp: msg.timestamp,
+                    content: msg.content,
+                    attachments: None,
+                });
+            }
+            if out.len() >= limit as usize {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
+    /// `GET /guilds/{id}/roles` — guild roles sorted by position.
+    pub async fn list_roles(&mut self, guild_id: &str) -> Result<Vec<crate::types::Role>> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let inner = self.inner()?;
+        let raw: Vec<RawRole> = inner
+            .get(Route::GetGuildRoles { guild_id: gid })
+            .await
+            .context("GET /guilds/{id}/roles failed")?;
+        let mut roles: Vec<crate::types::Role> = raw
+            .into_iter()
+            .map(|r| crate::types::Role {
+                id: r.id.to_string(),
+                name: r.name,
+                color: r.color,
+                position: r.position,
+                permissions: r.permissions,
+            })
+            .collect();
+        roles.sort_by_key(|r| std::cmp::Reverse(r.position));
+        Ok(roles)
+    }
+
+    /// `GET /users/@me/relationships` — friends/blocked/pending.
+    pub async fn relationships(&mut self) -> Result<Vec<crate::types::Relationship>> {
+        let inner = self.inner()?;
+        let raw: Vec<RawRelationship> = inner.get(Route::GetRelationships).await.context("GET relationships failed")?;
+        Ok(raw
+            .into_iter()
+            .map(|r| crate::types::Relationship {
+                user_id: r.id.to_string(),
+                username: r.username,
+                relationship_type: r.relationship_type,
+            })
+            .collect())
+    }
+
+    /// `GET /users/{id}/profile` — user profile.
+    pub async fn user_profile(&mut self, user_id: &str) -> Result<crate::types::UserProfile> {
+        let uid: u64 = user_id.parse().context("invalid user id")?;
+        let inner = self.inner()?;
+        let raw: RawUserProfile = inner
+            .get(Route::GetUserProfile { user_id: uid, guild_id: None })
+            .await
+            .context("GET /users/{id}/profile failed")?;
+        Ok(crate::types::UserProfile {
+            user_id: raw.user.id.to_string(),
+            username: raw.user.username,
+            global_name: raw.user.global_name,
+            bio: raw.user_bio,
+        })
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
@@ -299,6 +393,56 @@ struct RawMessage {
 struct RawAuthor {
     id: u64,
     username: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct SearchResponse {
+    messages: Vec<Vec<RawSearchMessage>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawSearchMessage {
+    id: u64,
+    channel_id: u64,
+    author: RawAuthor,
+    content: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawRole {
+    id: u64,
+    name: String,
+    #[serde(default)]
+    color: u32,
+    #[serde(default)]
+    position: i32,
+    #[serde(default)]
+    permissions: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawRelationship {
+    id: u64,
+    #[serde(rename = "type")]
+    relationship_type: u8,
+    #[serde(default)]
+    username: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawUserProfile {
+    user: RawProfileUser,
+    #[serde(default)]
+    user_bio: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawProfileUser {
+    id: u64,
+    username: String,
+    #[serde(default)]
+    global_name: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

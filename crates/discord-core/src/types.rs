@@ -127,6 +127,35 @@ pub struct GuildInfo {
     pub online_count: Option<u32>,
 }
 
+/// A guild role.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Role {
+    pub id: String,
+    pub name: String,
+    pub color: u32,
+    pub position: i32,
+    pub permissions: String,
+}
+
+/// A user relationship (friend/blocked/pending).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Relationship {
+    pub user_id: String,
+    pub username: String,
+    pub relationship_type: u8,
+}
+
+/// A user's public profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub user_id: String,
+    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub global_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+}
+
 /// A DM or group-DM channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DmChannel {

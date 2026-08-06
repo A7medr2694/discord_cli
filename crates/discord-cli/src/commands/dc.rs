@@ -66,6 +66,31 @@ pub enum DcCmd {
         /// Guild name or ID.
         guild: String,
     },
+    /// Discord native search within a guild.
+    Search {
+        /// Guild name or ID.
+        guild: String,
+        /// Search query.
+        query: String,
+        /// Restrict to a channel name or ID.
+        #[arg(short, long)]
+        channel: Option<String>,
+        /// Max results (default 25).
+        #[arg(short, long, default_value_t = 25)]
+        limit: u32,
+    },
+    /// List guild roles (sorted by position).
+    Roles {
+        /// Guild name or ID.
+        guild: String,
+    },
+    /// Show a user's profile (default: self).
+    Profile {
+        /// User ID (default: current user).
+        user_id: Option<String>,
+    },
+    /// Show friends/blocked/pending relationships.
+    Relationships,
 }
 
 impl DcCtx {
@@ -249,6 +274,89 @@ pub async fn dc_info(ctx: &DcCtx, guild: &str) -> ExitCode {
     }
 }
 
+/// `dc search <GUILD> <QUERY>`
+pub async fn dc_search(
+    ctx: &DcCtx,
+    guild: &str,
+    query: &str,
+    channel: Option<&str>,
+    limit: u32,
+) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guild_id = match resolve::resolve_guild(&mut client, guild).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.search_guild_messages(&guild_id, query, channel, limit).await {
+        Ok(msgs) => {
+            let _ = output::emit(&msgs, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc roles <GUILD>`
+pub async fn dc_roles(ctx: &DcCtx, guild: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guild_id = match resolve::resolve_guild(&mut client, guild).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.list_roles(&guild_id).await {
+        Ok(roles) => {
+            let _ = output::emit(&roles, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc profile [USER_ID]`
+pub async fn dc_profile(ctx: &DcCtx, user_id: Option<&str>) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let uid = match user_id {
+        Some(id) => id.to_string(),
+        None => match client.get_me().await {
+            Ok(me) => me.id,
+            Err(e) => {
+                return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+            }
+        },
+    };
+    match client.user_profile(&uid).await {
+        Ok(profile) => {
+            let _ = output::emit(&profile, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc relationships`
+pub async fn dc_relationships(ctx: &DcCtx) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    match client.relationships().await {
+        Ok(rels) => {
+            let _ = output::emit(&rels, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -263,5 +371,11 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         }
         DcCmd::Members { guild, max } => dc_members(ctx, &guild, max).await,
         DcCmd::Info { guild } => dc_info(ctx, &guild).await,
+        DcCmd::Search { guild, query, channel, limit } => {
+            dc_search(ctx, &guild, &query, channel.as_deref(), limit).await
+        }
+        DcCmd::Roles { guild } => dc_roles(ctx, &guild).await,
+        DcCmd::Profile { user_id } => dc_profile(ctx, user_id.as_deref()).await,
+        DcCmd::Relationships => dc_relationships(ctx).await,
     }
 }
