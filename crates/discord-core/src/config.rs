@@ -162,6 +162,34 @@ pub fn delete_token_keyring() -> Result<()> {
     Ok(())
 }
 
+/// Per-install stable device id `discord-cli-<3hex>` (mrarfarf Q3).
+///
+/// Persisted in the config dir so each install looks distinct to Discord.
+/// Regenerated only if missing (never per-run — that looks bot-like).
+pub fn device_id() -> Result<String> {
+    let dir = data_dir()?;
+    let path = dir.join("device_id");
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        let s = existing.trim();
+        if s.starts_with("discord-cli-") {
+            return Ok(s.to_string());
+        }
+    }
+    let hex: String = (0..3)
+        .map(|_| {
+            let n = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.subsec_nanos())
+                .unwrap_or(0)
+                % 16) as u8;
+            format!("{:x}", n)
+        })
+        .collect();
+    let id = format!("discord-cli-{}", hex);
+    std::fs::write(&path, &id).ok();
+    Ok(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +234,18 @@ mod tests {
     #[test]
     fn api_base_is_v10() {
         assert_eq!(API_BASE, "https://discord.com/api/v10");
+    }
+
+    #[test]
+    fn device_id_is_stable_and_prefixed() {
+        // device_id writes to the real data dir; use a temp DATA_DIR.
+        let tmp = std::env::temp_dir().join(format!("discord-device-test-{}", std::process::id()));
+        std::env::set_var("DATA_DIR", &tmp);
+        let id1 = device_id().unwrap();
+        let id2 = device_id().unwrap();
+        assert!(id1.starts_with("discord-cli-"), "prefix: {id1}");
+        assert_eq!(id1, id2, "must be stable across calls");
+        std::env::remove_var("DATA_DIR");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
