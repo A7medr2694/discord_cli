@@ -95,6 +95,38 @@ pub struct Me {
     pub premium_type: u32,
 }
 
+/// A guild member (jackwener list_members shape).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Member {
+    pub id: String,
+    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub global_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nick: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub joined_at: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub bot: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// Guild info with counts (jackwener get_guild_info shape).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuildInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub member_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online_count: Option<u32>,
+}
+
 /// A DM or group-DM channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DmChannel {

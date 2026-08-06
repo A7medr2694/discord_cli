@@ -53,6 +53,19 @@ pub enum DcCmd {
         #[arg(long)]
         before: Option<u64>,
     },
+    /// List guild members.
+    Members {
+        /// Guild name or ID.
+        guild: String,
+        /// Max members (default 50, max 1000).
+        #[arg(long, default_value_t = 50)]
+        max: u32,
+    },
+    /// Show guild info (name, member counts).
+    Info {
+        /// Guild name or ID.
+        guild: String,
+    },
 }
 
 impl DcCtx {
@@ -198,6 +211,44 @@ pub async fn dc_read(
     }
 }
 
+/// `dc members <GUILD>`
+pub async fn dc_members(ctx: &DcCtx, guild: &str, max: u32) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guild_id = match resolve::resolve_guild(&mut client, guild).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.list_members(&guild_id, max).await {
+        Ok(members) => {
+            let _ = output::emit(&members, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc info <GUILD>`
+pub async fn dc_info(ctx: &DcCtx, guild: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let guild_id = match resolve::resolve_guild(&mut client, guild).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.guild_info(&guild_id).await {
+        Ok(info) => {
+            let _ = output::emit(&info, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -210,5 +261,7 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Read { channel, limit, before } => {
             dc_read(ctx, &channel, limit, before).await
         }
+        DcCmd::Members { guild, max } => dc_members(ctx, &guild, max).await,
+        DcCmd::Info { guild } => dc_info(ctx, &guild).await,
     }
 }

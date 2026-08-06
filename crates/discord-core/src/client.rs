@@ -11,7 +11,7 @@ use discord_user::client::DiscordHttpClient;
 use discord_user::route::Route;
 
 use crate::config::{API_BASE, resolve_token};
-use crate::types::{Channel, DmChannel, Guild, Me};
+use crate::types::{Channel, DmChannel, Guild, GuildInfo, Me, Member};
 
 /// Authenticated API client backed by `discord-user-rs`.
 ///
@@ -151,6 +151,44 @@ impl ApiClient {
         Ok(dms)
     }
 
+    /// `GET /guilds/{id}/members` — list members (jackwener list_members).
+    pub async fn list_members(&mut self, guild_id: &str, limit: u32) -> Result<Vec<Member>> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let inner = self.inner()?;
+        let raw: Vec<RawMember> = inner
+            .get(Route::GetGuildMembers { guild_id: gid, limit: limit.min(1000) })
+            .await
+            .context("GET /guilds/{id}/members failed")?;
+        Ok(raw
+            .into_iter()
+            .map(|m| Member {
+                id: m.user.id.to_string(),
+                username: m.user.username,
+                global_name: m.user.global_name,
+                nick: m.nick,
+                joined_at: m.joined_at,
+                bot: m.user.bot.unwrap_or(false),
+            })
+            .collect())
+    }
+
+    /// `GET /guilds/{id}?with_counts=true` — guild info (jackwener get_guild_info).
+    pub async fn guild_info(&mut self, guild_id: &str) -> Result<GuildInfo> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let inner = self.inner()?;
+        let raw: RawGuildInfo = inner
+            .get(Route::GetGuild { guild_id: gid, with_counts: true })
+            .await
+            .context("GET /guilds/{id} failed")?;
+        Ok(GuildInfo {
+            id: raw.id.to_string(),
+            name: raw.name,
+            description: raw.description,
+            member_count: raw.approximate_member_count,
+            online_count: raw.approximate_presence_count,
+        })
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
@@ -261,6 +299,35 @@ struct RawMessage {
 struct RawAuthor {
     id: u64,
     username: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawMember {
+    nick: Option<String>,
+    joined_at: Option<String>,
+    user: RawMemberUser,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawMemberUser {
+    id: u64,
+    username: String,
+    #[serde(default)]
+    global_name: Option<String>,
+    #[serde(default)]
+    bot: Option<bool>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawGuildInfo {
+    id: u64,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    approximate_member_count: Option<u32>,
+    #[serde(default)]
+    approximate_presence_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
