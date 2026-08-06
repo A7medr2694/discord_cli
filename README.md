@@ -177,6 +177,8 @@ discord watch --keyword "incident" --jsonl
 | `pin <CH> <MSG_ID>` | Pin a message |
 | `dm-group create/add/remove` | Group-DM management (gated create) |
 | `notify guild/channel` | Notification settings |
+| `join <INVITE> [--confirm]` | Preview + join a server via invite code/URL (gated) |
+| `leave <GUILD> [--confirm]` | Leave a server (gated) |
 
 ### Archive & query (local SQLite + FTS5)
 

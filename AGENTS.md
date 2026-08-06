@@ -50,6 +50,8 @@ discord send <CHANNEL> --text - --file ./report.pdf --confirm       # --text - r
 discord watch --keyword "bug" --jsonl    # stream matching messages as JSONL
 discord watch --typing --jsonl               # also emit typing events as JSONL
 discord typing <CHANNEL>                     # send a typing indicator
+discord join "https://discord.gg/abc123" --confirm   # join a server via invite
+discord leave "old-server" --confirm               # leave a server
 ```
 
 ## MCP mode
