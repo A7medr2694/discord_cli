@@ -22,6 +22,28 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
+    /// Set the live gateway presence (Op 3) for an active connection.
+    ///
+    /// Requires a `DiscordUser` gateway; use `DiscordUserContext::gateway()`
+    /// to obtain it (verified: `DiscordContext` is public, `gateway() ->
+    /// Option<&Gateway>`, `Gateway::send_presence` exists — crate context.rs:10,
+    /// gateway.rs:953). Returns Ok(()) when no gateway is connected (presence
+    /// applies on next connect via `with_status` instead).
+    pub async fn set_presence(
+        client: &discord_user::DiscordUser,
+        status: discord_user::UserStatus,
+    ) -> anyhow::Result<()> {
+        use discord_user::DiscordContext;
+        if let Some(gw) = client.gateway() {
+            gw.send_presence(status)
+                .await
+                .map_err(|e| anyhow::anyhow!("gateway send_presence failed: {e}"))?;
+        }
+        Ok(())
+    }
+}
+
+impl ApiClient {
     /// Create a client from a resolved token.
     pub fn with_token(token: impl Into<String>) -> Self {
         Self {
