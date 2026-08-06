@@ -48,6 +48,8 @@ discord send <CHANNEL> --text - --file ./report.pdf --confirm       # --text - r
 ### "Watch for keywords"
 ```
 discord watch --keyword "bug" --jsonl    # stream matching messages as JSONL
+discord watch --typing --jsonl               # also emit typing events as JSONL
+discord typing <CHANNEL>                     # send a typing indicator
 ```
 
 ## MCP mode

@@ -195,7 +195,8 @@ discord watch --keyword "incident" --jsonl
 
 | Command | What it does |
 |---------|--------------|
-| `tail <CH> [--once]` | Gateway live follow (invisible presence) |
+| `typing <CH>` | Send a typing indicator (one-shot) |
+| `tail <CH> [--once]` / `watch [--typing]` | Gateway live follow (invisible presence) |
 | `watch [--channel C] [--keyword K]` | Long-running JSONL stream for agents |
 | `serve` | MCP server (stdio, 11 tools) |
 
