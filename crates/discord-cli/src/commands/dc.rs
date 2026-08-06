@@ -42,6 +42,17 @@ pub enum DcCmd {
         #[arg(long)]
         after: Option<u64>,
     },
+    /// Read recent messages (default 50) — the key AI-facing read.
+    Read {
+        /// Channel name or ID.
+        channel: String,
+        /// Max messages (default 50).
+        #[arg(short, long, default_value_t = 50)]
+        limit: usize,
+        /// Fetch messages before this snowflake.
+        #[arg(long)]
+        before: Option<u64>,
+    },
 }
 
 impl DcCtx {
@@ -104,6 +115,38 @@ pub async fn dc_dms(ctx: &DcCtx) -> ExitCode {
     }
 }
 
+/// Resolve a channel name to a channel ID (numeric ID passes through;
+/// otherwise search across the user's guilds). Used by read/history.
+async fn resolve_channel_id(
+    client: &mut ApiClient,
+    channel: &str,
+) -> Result<String, ExitCode> {
+    if channel.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(channel.to_string());
+    }
+    let guilds = match client.list_guilds().await {
+        Ok(g) => g,
+        Err(e) => {
+            return Err(ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)))
+        }
+    };
+    for g in &guilds {
+        if let Ok(chs) = client.list_channels(&g.id).await {
+            if let Some(c) = chs
+                .iter()
+                .find(|c| c.name.to_lowercase() == channel.to_lowercase())
+            {
+                return Ok(c.id.clone());
+            }
+        }
+    }
+    Err(ExitCode::from(output::emit_error(
+        "NotFound",
+        &format!("channel \"{channel}\" not found"),
+        exit::NOT_FOUND,
+    )))
+}
+
 /// `dc history <CHANNEL>` — channel is an ID (or we resolve via a guild).
 pub async fn dc_history(
     ctx: &DcCtx,
@@ -116,37 +159,37 @@ pub async fn dc_history(
         Ok(c) => c,
         Err(code) => return code,
     };
-    // If channel is all-digits, use as channel ID directly.
-    let channel_id = if channel.chars().all(|c| c.is_ascii_digit()) {
-        channel.to_string()
-    } else {
-        // Otherwise try to resolve via the first guild containing it.
-        let guilds = match client.list_guilds().await {
-            Ok(g) => g,
-            Err(e) => return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
-        };
-        let mut found = None;
-        for g in &guilds {
-            if let Ok(chs) = client.list_channels(&g.id).await {
-                if let Some(c) = chs.iter().find(|c| c.name.to_lowercase() == channel.to_lowercase()) {
-                    found = Some(c.id.clone());
-                    break;
-                }
-            }
-        }
-        match found {
-            Some(id) => id,
-            None => {
-                return ExitCode::from(output::emit_error(
-                    "NotFound",
-                    &format!("channel \"{channel}\" not found"),
-                    exit::NOT_FOUND,
-                ))
-            }
-        }
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
     };
 
     match client.fetch_messages(&channel_id, limit, before, after).await {
+        Ok(msgs) => {
+            let _ = output::emit(&msgs, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc read <CHANNEL>` — recent messages (default 50), AI-facing.
+pub async fn dc_read(
+    ctx: &DcCtx,
+    channel: &str,
+    limit: usize,
+    before: Option<u64>,
+) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+
+    match client.fetch_messages(&channel_id, limit, before, None).await {
         Ok(msgs) => {
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
@@ -163,6 +206,9 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Dms => dc_dms(ctx).await,
         DcCmd::History { channel, limit, before, after } => {
             dc_history(ctx, &channel, limit, before, after).await
+        }
+        DcCmd::Read { channel, limit, before } => {
+            dc_read(ctx, &channel, limit, before).await
         }
     }
 }
