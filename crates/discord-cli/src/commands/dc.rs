@@ -113,6 +113,26 @@ pub enum DcCmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Edit an own message.
+    Edit {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// New content.
+        #[arg(long)]
+        text: String,
+    },
+    /// Delete an own message (requires --confirm).
+    Delete {
+        /// Channel name or ID.
+        channel: String,
+        /// Message ID.
+        message_id: String,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
 }
 
 impl DcCtx {
@@ -443,6 +463,52 @@ pub async fn dc_send(
     }
 }
 
+/// `dc edit <CHANNEL> <MSG_ID> --text ...`
+pub async fn dc_edit(ctx: &DcCtx, channel: &str, message_id: &str, text: &str) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.edit_message(&channel_id, message_id, text).await {
+        Ok(_) => {
+            let data = serde_json::json!({ "edited": true, "message_id": message_id });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
+/// `dc delete <CHANNEL> <MSG_ID> [--confirm]`
+pub async fn dc_delete(ctx: &DcCtx, channel: &str, message_id: &str, confirm: bool) -> ExitCode {
+    if !confirm {
+        eprintln!(
+            "This will delete message {message_id} in \"{channel}\". Add --confirm to proceed."
+        );
+        return ExitCode::from(exit::USAGE);
+    }
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.delete_message(&channel_id, message_id).await {
+        Ok(_) => {
+            let data = serde_json::json!({ "deleted": true, "message_id": message_id });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -466,6 +532,12 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Threads { channel } => dc_threads(ctx, &channel).await,
         DcCmd::Send { channel, text, reply, confirm, dry_run } => {
             dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await
+        }
+        DcCmd::Edit { channel, message_id, text } => {
+            dc_edit(ctx, &channel, &message_id, &text).await
+        }
+        DcCmd::Delete { channel, message_id, confirm } => {
+            dc_delete(ctx, &channel, &message_id, confirm).await
         }
     }
 }

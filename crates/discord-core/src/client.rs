@@ -359,6 +359,35 @@ impl ApiClient {
         Ok(resp.id.to_string())
     }
 
+    /// `PATCH /channels/{id}/messages/{mid}` — edit own message (M3.2).
+    pub async fn edit_message(&mut self, channel_id: &str, message_id: &str, content: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        let req = discord_user::types::EditMessageRequest {
+            content: Some(content),
+            flags: None,
+            ..Default::default()
+        };
+        inner
+            .patch::<serde_json::Value, _>(Route::EditMessage { channel_id: cid, message_id: mid }, req)
+            .await
+            .context("PATCH message failed")?;
+        Ok(())
+    }
+
+    /// `DELETE /channels/{id}/messages/{mid}` — delete own message (M3.2).
+    pub async fn delete_message(&mut self, channel_id: &str, message_id: &str) -> Result<()> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        inner
+            .delete(Route::DeleteMessage { channel_id: cid, message_id: mid })
+            .await
+            .context("DELETE message failed")?;
+        Ok(())
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
