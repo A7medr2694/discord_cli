@@ -170,7 +170,7 @@ discord watch --keyword "incident" --jsonl
 
 | Command | What it does |
 |---------|--------------|
-| `send <CH> --text "..." [--reply ID] [--confirm]` | Send / reply (gated) |
+| `send <CH> --text "..." [--file PATH]... [--reply ID] [--confirm]` | Send / reply / attach (gated; `--text -` reads stdin) |
 | `edit <CH> <MSG_ID> --text "..."` | Edit own message |
 | `delete <CH> <MSG_ID> [--confirm]` | Delete own message (gated) |
 | `react` / `unreact` | Add / remove a reaction |

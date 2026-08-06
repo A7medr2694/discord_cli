@@ -17,7 +17,7 @@ A Rust CLI + MCP server that operates a **user** Discord account (self-bot style
 - Top-level verbs: `status`, `whoami`, `auth`, `serve`, plus local queries `search` / `recent` / `stats` / `top` / `export` / `purge`.
 - `dc` group: `guilds`, `channels`, `dms`, `history`, `read`, `send`, `edit`, `delete`, `react`, `unreact`, `pin`, `pins`, `members`, `info`, `search`, `roles`, `profile`, `relationships`, `threads`, `sync`, `sync-all`, `tail`, `watch`, `dm-group`, `notify`.
 - **Output**: JSONL when piped, `--json` for a single envelope `{ok, schema_version, data|error}`.
-- **Exit codes**: `0` ok, `1` error, `2` usage (missing `--confirm`), `3` not found, `4` forbidden, `5` network.
+- **Exit codes**: `0` ok, `1` error, `2` usage (missing `--confirm`), `3` not found, `4` forbidden, `5` network, `7` attachment/file IO error.
 - **Errors → stderr**, data → stdout.
 
 ## Agent playbook (common flows)
@@ -41,6 +41,8 @@ discord dms --json
 ```
 discord send <CHANNEL> --text "..." --reply <MSG_ID>   # reply is auto-approved
 discord send <CHANNEL> --text "..." --confirm          # new message needs --confirm
+discord send <CHANNEL> --text "log attached" --file ./build.log --confirm   # send with attachment
+discord send <CHANNEL> --text - --file ./report.pdf --confirm       # --text - reads stdin
 ```
 
 ### "Watch for keywords"

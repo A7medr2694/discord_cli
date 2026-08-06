@@ -27,6 +27,7 @@ Every command emits a stable, machine-readable envelope.
 | 3 | Not found |
 | 4 | Forbidden / rate-limited |
 | 5 | Network / timeout |
+| 7 | Attachment / file IO error (send --file) |
 
 ## Entity shapes
 
