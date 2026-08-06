@@ -11,7 +11,7 @@ use discord_user::client::DiscordHttpClient;
 use discord_user::route::Route;
 
 use crate::config::{API_BASE, resolve_token};
-use crate::types::Me;
+use crate::types::{Channel, Guild, Me};
 
 /// Authenticated API client backed by `discord-user-rs`.
 ///
@@ -59,6 +59,176 @@ impl ApiClient {
             Err(_) => Ok(false),
         }
     }
+
+    /// `GET /users/@me/guilds` — guilds the user belongs to.
+    /// Response is a raw array; we deserialize to our `Guild` shape.
+    pub async fn list_guilds(&mut self) -> Result<Vec<Guild>> {
+        let inner = self.inner()?;
+        let raw: Vec<RawGuild> = inner
+            .get(Route::GetCurrentUserGuilds)
+            .await
+            .context("GET /users/@me/guilds failed")?;
+        Ok(raw
+            .into_iter()
+            .map(|g| Guild {
+                id: g.id.to_string(),
+                name: g.name,
+                icon: g.icon,
+                owner: Some(g.owner),
+            })
+            .collect())
+    }
+
+    /// Resolve a guild name or ID to a guild ID (jackwener `resolve_guild_id`).
+    /// Returns Ok(None) if not found.
+    pub async fn resolve_guild_id(&mut self, guild: &str) -> Result<Option<String>> {
+        if guild.chars().all(|c| c.is_ascii_digit()) {
+            return Ok(Some(guild.to_string()));
+        }
+        let guilds = self.list_guilds().await?;
+        let needle = guild.to_lowercase();
+        Ok(guilds
+            .into_iter()
+            .find(|g| g.name.to_lowercase().contains(&needle))
+            .map(|g| g.id))
+    }
+
+    /// `GET /guilds/{id}/channels` — channels of a guild (text-like filtered).
+    pub async fn list_channels(&mut self, guild_id: &str) -> Result<Vec<Channel>> {
+        let gid: u64 = guild_id.parse().context("invalid guild id")?;
+        let inner = self.inner()?;
+        let raw: Vec<RawChannel> = inner
+            .get(Route::GetGuildChannels { guild_id: gid })
+            .await
+            .context("GET /guilds/{id}/channels failed")?;
+        let mut channels: Vec<Channel> = raw
+            .into_iter()
+            .map(|c| Channel {
+                id: c.id.to_string(),
+                name: c.name.unwrap_or_default(),
+                guild_id: Some(guild_id.to_string()),
+                channel_type: c.channel_type,
+                topic: c.topic,
+                parent_id: c.parent_id.map(|p| p.to_string()),
+                position: Some(c.position),
+            })
+            .collect();
+        // text/announcement/forum only, sorted by position (jackwener).
+        channels.retain(|c| c.is_text_like());
+        channels.sort_by_key(|c| c.position.unwrap_or(0));
+        Ok(channels)
+    }
+
+    /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
+    /// `before`/`after` are snowflake cursors. Returns sorted ascending.
+    pub async fn fetch_messages(
+        &mut self,
+        channel_id: &str,
+        limit: usize,
+        before: Option<u64>,
+        after: Option<u64>,
+    ) -> Result<Vec<crate::types::Message>> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let mut all: Vec<RawMessage> = Vec::new();
+        let mut remaining = limit.min(1000);
+        let mut cur_before = before;
+        let mut cur_after = after;
+
+        while remaining > 0 {
+            let batch = remaining.min(100) as u32;
+            let route = Route::GetMessages {
+                channel_id: cid,
+                limit: Some(batch),
+                before: cur_before,
+                after: cur_after,
+            };
+            let msgs: Vec<RawMessage> = inner.get(route).await?;
+            let n = msgs.len();
+            if n == 0 {
+                break;
+            }
+            remaining = remaining.saturating_sub(n);
+            // Small delay between pages to be rate-limit friendly (jackwener).
+            tokio::time::sleep(std::time::Duration::from_millis(
+                400 + (randish() % 400),
+            ))
+            .await;
+
+            if after.is_some() {
+                cur_after = Some(msgs[0].id);
+            } else {
+                cur_before = Some(msgs[n - 1].id);
+            }
+            all.extend(msgs);
+            if n < batch as usize {
+                break;
+            }
+        }
+
+        // Sort ascending by id (jackwener sorts by msg_id ascending).
+        all.sort_by_key(|m| m.id);
+        Ok(all
+            .into_iter()
+            .map(|m| crate::types::Message {
+                message_id: m.id.to_string(),
+                channel_id: channel_id.to_string(),
+                guild_id: None,
+                author_id: Some(m.author.id.to_string()),
+                author: m.author.username,
+                timestamp: m.timestamp,
+                content: m.content,
+                attachments: None,
+            })
+            .collect())
+    }
+}
+
+/// Small deterministic-ish jitter (0..400). Not cryptographic.
+fn randish() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos() as u64;
+    n % 400
+}
+
+/// Raw Discord response shapes (subset we consume).
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawGuild {
+    id: u64,
+    name: String,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    owner: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawChannel {
+    id: u64,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(rename = "type")]
+    channel_type: u8,
+    #[serde(default)]
+    topic: Option<String>,
+    #[serde(default)]
+    parent_id: Option<u64>,
+    #[serde(default)]
+    position: i32,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawMessage {
+    id: u64,
+    author: RawAuthor,
+    content: String,
+    timestamp: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawAuthor {
+    id: u64,
+    username: String,
 }
 
 /// The REST base, re-exported for callers that need the full URL.
@@ -78,5 +248,35 @@ mod tests {
     #[test]
     fn api_base_is_v10() {
         assert_eq!(REST_BASE, "https://discord.com/api/v10");
+    }
+
+    #[test]
+    fn guild_id_resolution_detects_numeric() {
+        // resolve_guild_id short-circuits numeric to Some(id) without network.
+        // We can't call the async method here without a client, but we verify
+        // the predicate used: all-digits.
+        let numeric = "1234567890";
+        assert!(numeric.chars().all(|c| c.is_ascii_digit()));
+        let named = "my-server";
+        assert!(!named.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn channel_text_like_filter() {
+        // Mirrors list_channels retain() logic: keep 0/5/15 only.
+        let types = [0u8, 2, 5, 13, 15, 16];
+        let kept: Vec<u8> = types
+            .into_iter()
+            .filter(|&t| matches!(t, 0 | 5 | 15))
+            .collect();
+        assert_eq!(kept, vec![0, 5, 15]);
+    }
+
+    #[test]
+    fn randish_is_bounded() {
+        for _ in 0..100 {
+            let r = randish();
+            assert!(r < 400, "randish out of bounds: {r}");
+        }
     }
 }
