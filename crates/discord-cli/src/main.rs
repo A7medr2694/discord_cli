@@ -112,6 +112,15 @@ enum Command {
         #[arg(short, long)]
         yes: bool,
     },
+    /// Auth: auto-detect token, or paste manually, validate, save.
+    Auth {
+        /// Save the detected/pasted token to .env.
+        #[arg(long)]
+        save: bool,
+        /// Paste the token manually instead of auto-detect.
+        #[arg(long)]
+        paste: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -167,6 +176,7 @@ async fn run() -> ExitCode {
         Some(Command::Purge { channel, yes }) => {
             commands::local::cmd_purge(&channel, yes, format)
         }
+        Some(Command::Auth { save, paste }) => cmd_auth(save, paste, format).await,
         None => {
             // No subcommand: print help.
             let mut c = Cli::command();
@@ -201,6 +211,52 @@ async fn cmd_status(cli: &Cli, format: Format) -> ExitCode {
             ExitCode::from(exit::ERROR)
         }
     }
+}
+
+/// `auth [--save] [--paste]` — auto-detect or paste token, validate, save.
+async fn cmd_auth(save: bool, paste: bool, format: Format) -> ExitCode {
+    // Paste flow.
+    if paste {
+        match discord_auth::auth::auth_paste(save).await {
+            Ok(token) => {
+                let _ = output::emit(
+                    &serde_json::json!({ "authenticated": true, "token_saved": save, "token": "***" }),
+                    format,
+                );
+                return ExitCode::from(exit::OK);
+            }
+            Err(e) => {
+                return ExitCode::from(output::emit_error("AuthError", &e.to_string(), exit::ERROR))
+            }
+        }
+    }
+    // Auto-detect flow.
+    let tokens = discord_auth::auth::find_tokens();
+    if tokens.is_empty() {
+        return ExitCode::from(output::emit_error(
+            "NoTokenFound",
+            "no token found in local Discord/browser. Use --paste to enter manually.",
+            exit::ERROR,
+        ));
+    }
+    // Validate each candidate, pick first valid.
+    for (source, token) in &tokens {
+        if let Ok(true) = discord_auth::auth::validate_token(token).await {
+            if save {
+                let _ = discord_auth::auth::save_token_to_env(token, None);
+            }
+            let _ = output::emit(
+                &serde_json::json!({ "authenticated": true, "source": source, "token_saved": save }),
+                format,
+            );
+            return ExitCode::from(exit::OK);
+        }
+    }
+    ExitCode::from(output::emit_error(
+        "InvalidTokens",
+        "found token(s) but none validated against Discord",
+        exit::ERROR,
+    ))
 }
 
 async fn cmd_whoami(cli: &Cli, format: Format) -> ExitCode {
