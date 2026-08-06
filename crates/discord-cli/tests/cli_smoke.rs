@@ -51,3 +51,23 @@ fn dc_help_lists_subcommands() {
     assert!(stdout.contains("guilds"));
     assert!(stdout.contains("channels"));
 }
+
+#[test]
+fn send_without_confirm_exits_2() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "send", "123456", "--text", "hi"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "send must exit 2 without --confirm");
+}
+
+#[test]
+fn send_dry_run_exits_0_with_preview() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["dc", "send", "123456", "--text", "hi", "--dry-run"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("\"action\":\"send_message\""));
+}

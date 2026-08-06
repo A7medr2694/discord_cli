@@ -96,6 +96,23 @@ pub enum DcCmd {
         /// Channel name or ID.
         channel: String,
     },
+    /// Send a message (requires --confirm unless --reply/--dry-run).
+    Send {
+        /// Channel name or ID.
+        channel: String,
+        /// Message content.
+        #[arg(long)]
+        text: String,
+        /// Reply to a message id.
+        #[arg(long)]
+        reply: Option<String>,
+        /// Confirm a non-reply send (never interactive).
+        #[arg(long)]
+        confirm: bool,
+        /// Preview what would be sent without sending.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 impl DcCtx {
@@ -381,6 +398,51 @@ pub async fn dc_threads(ctx: &DcCtx, channel: &str) -> ExitCode {
     }
 }
 
+/// `dc send <CHANNEL> --text ...` — requires --confirm unless reply/dry-run.
+pub async fn dc_send(
+    ctx: &DcCtx,
+    channel: &str,
+    text: &str,
+    reply: Option<&str>,
+    confirm: bool,
+    dry_run: bool,
+) -> ExitCode {
+    // Safety (discli pattern): --confirm required for non-reply sends.
+    if !confirm && reply.is_none() && !dry_run {
+        eprintln!(
+            "This will send a message to \"{channel}\". Add --confirm to proceed, or --dry-run to preview."
+        );
+        return ExitCode::from(exit::USAGE);
+    }
+    if dry_run {
+        let data = serde_json::json!({
+            "action": "send_message",
+            "channel": channel,
+            "text": text,
+            "reply_to": reply,
+        });
+        let _ = output::emit(&data, ctx.format);
+        return ExitCode::from(exit::OK);
+    }
+
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    match client.send_message(&channel_id, text, reply).await {
+        Ok(id) => {
+            let data = serde_json::json!({ "message_id": id, "channel_id": channel_id });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// Dispatch a `dc` subcommand.
 pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
     match cmd {
@@ -402,5 +464,8 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Profile { user_id } => dc_profile(ctx, user_id.as_deref()).await,
         DcCmd::Relationships => dc_relationships(ctx).await,
         DcCmd::Threads { channel } => dc_threads(ctx, &channel).await,
+        DcCmd::Send { channel, text, reply, confirm, dry_run } => {
+            dc_send(ctx, &channel, &text, reply.as_deref(), confirm, dry_run).await
+        }
     }
 }

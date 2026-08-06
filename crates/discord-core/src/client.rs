@@ -329,6 +329,36 @@ impl ApiClient {
         }
     }
 
+    /// `POST /channels/{id}/messages` — send a message (M3.1).
+    /// Returns the new message id.
+    pub async fn send_message(
+        &mut self,
+        channel_id: &str,
+        content: &str,
+        reply_to: Option<&str>,
+    ) -> Result<String> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let req = discord_user::types::SendMessageRequest {
+            content,
+            tts: false,
+            flags: 0,
+            message_reference: reply_to.map(|id| discord_user::types::MessageReference {
+                reference_type: None,
+                message_id: Some(id.to_string()),
+                channel_id: None,
+                guild_id: None,
+            }),
+            nonce: None,
+            mobile_network_type: Some("unknown"), // mimic Discord mobile (selfbot)
+        };
+        let resp: RawMessage = inner
+            .post(Route::CreateMessage { channel_id: cid }, req)
+            .await
+            .context("POST /channels/{id}/messages failed")?;
+        Ok(resp.id.to_string())
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
