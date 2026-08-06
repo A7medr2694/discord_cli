@@ -51,6 +51,15 @@ pub struct SendParams {
     pub reply_to: Option<String>,
 }
 
+/// Get single message parameter.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct GetMessageParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// The message ID (snowflake).
+    pub message_id: String,
+}
+
 /// Search message parameter.
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SearchParams {
@@ -147,6 +156,30 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Read a DM channel's recent messages.
+    #[tool(description = "Read recent messages from a DM channel (same as read_messages).")]
+    pub async fn read_dm(&self, Parameters(req): Parameters<ReadParams>) -> Result<String, String> {
+        let mut c = self.client()?;
+        let limit = req.limit.unwrap_or(50) as usize;
+        let before = req.before.as_deref().and_then(|s| s.parse().ok());
+        let msgs = c
+            .fetch_messages(&req.channel_id, limit, before, None)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Get a single message by channel + message ID.
+    #[tool(description = "Fetch a single message by channel_id and message_id.")]
+    pub async fn get_message(&self, Parameters(req): Parameters<GetMessageParams>) -> Result<String, String> {
+        let mut c = self.client()?;
+        let msg = c
+            .get_message(&req.channel_id, &req.message_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::to_string(&msg).unwrap_or_else(|_| "{}".into()))
     }
 }
 

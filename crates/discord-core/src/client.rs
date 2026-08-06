@@ -493,6 +493,31 @@ impl ApiClient {
         Ok(())
     }
 
+    /// `GET /channels/{id}/messages/{mid}` — fetch a single message.
+    pub async fn get_message(
+        &mut self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> Result<crate::types::Message> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        let raw: RawMessage = inner
+            .get(Route::GetMessage { channel_id: cid, message_id: mid })
+            .await
+            .context("GET message failed")?;
+        Ok(crate::types::Message {
+            message_id: raw.id.to_string(),
+            channel_id: channel_id.to_string(),
+            guild_id: None,
+            author_id: Some(raw.author.id.to_string()),
+            author: raw.author.username,
+            timestamp: raw.timestamp,
+            content: raw.content,
+            attachments: None,
+        })
+    }
+
     /// `GET /channels/{id}/messages` — fetch messages, newest-first, paged.
     /// `before`/`after` are snowflake cursors. Returns sorted ascending.
     pub async fn fetch_messages(
