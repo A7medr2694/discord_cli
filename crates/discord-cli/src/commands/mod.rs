@@ -6,3 +6,4 @@
 pub mod dc;
 pub mod local;
 pub mod sync;
+pub mod tail;

@@ -177,6 +177,14 @@ pub enum DcCmd {
         #[arg(short, long, default_value_t = 200)]
         limit: usize,
     },
+    /// Follow new messages live (gateway, invisible presence).
+    Tail {
+        /// Channel ID (empty = all channels).
+        channel: String,
+        /// Fetch once and exit after a short listen.
+        #[arg(long)]
+        once: bool,
+    },
 }
 
 impl DcCtx {
@@ -724,5 +732,6 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Pins { channel } => dc_pins(ctx, &channel).await,
         DcCmd::Sync { channel, limit } => dc_sync(ctx, &channel, limit).await,
         DcCmd::SyncAll { limit } => dc_sync_all(ctx, limit).await,
+        DcCmd::Tail { channel, once } => crate::commands::tail::dc_tail(ctx, &channel, once).await,
     }
 }
