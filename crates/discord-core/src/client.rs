@@ -249,6 +249,9 @@ impl ApiClient {
         let mut out = Vec::new();
         for group in raw.messages {
             for msg in group {
+                let urls = msg.url_list();
+                let details = msg.details();
+                let reactions = msg.reaction_total();
                 out.push(crate::types::Message {
                     message_id: msg.id.to_string(),
                     channel_id: msg.channel_id.to_string(),
@@ -257,7 +260,9 @@ impl ApiClient {
                     author: msg.author.username,
                     timestamp: msg.timestamp,
                     content: msg.content,
-                    attachments: None,
+                    attachments: urls,
+                    attachment_details: details,
+                    reactions,
                 });
             }
             if out.len() >= limit as usize {
@@ -742,15 +747,22 @@ impl ApiClient {
             .context("GET pins failed")?;
         Ok(raw
             .into_iter()
-            .map(|m| crate::types::Message {
-                message_id: m.id.to_string(),
-                channel_id: channel_id.to_string(),
-                guild_id: None,
-                author_id: Some(m.author.id.to_string()),
-                author: m.author.username,
-                timestamp: m.timestamp,
-                content: m.content,
-                attachments: None,
+            .map(|m| {
+                let urls = m.url_list();
+                let details = m.details();
+                let reactions = m.reaction_total();
+                crate::types::Message {
+                    message_id: m.id.to_string(),
+                    channel_id: channel_id.to_string(),
+                    guild_id: None,
+                    author_id: Some(m.author.id.to_string()),
+                    author: m.author.username,
+                    timestamp: m.timestamp,
+                    content: m.content,
+                    attachments: urls,
+                    attachment_details: details,
+                    reactions,
+                }
             })
             .collect())
     }
@@ -815,6 +827,9 @@ impl ApiClient {
             })
             .await
             .context("GET message failed")?;
+        let urls = raw.url_list();
+        let details = raw.details();
+        let reactions = raw.reaction_total();
         Ok(crate::types::Message {
             message_id: raw.id.to_string(),
             channel_id: channel_id.to_string(),
@@ -823,7 +838,9 @@ impl ApiClient {
             author: raw.author.username,
             timestamp: raw.timestamp,
             content: raw.content,
-            attachments: None,
+            attachments: urls,
+            attachment_details: details,
+            reactions,
         })
     }
 
@@ -875,15 +892,22 @@ impl ApiClient {
         all.sort_by_key(|m| m.id.clone());
         Ok(all
             .into_iter()
-            .map(|m| crate::types::Message {
-                message_id: m.id.to_string(),
-                channel_id: channel_id.to_string(),
-                guild_id: None,
-                author_id: Some(m.author.id.to_string()),
-                author: m.author.username,
-                timestamp: m.timestamp,
-                content: m.content,
-                attachments: None,
+            .map(|m| {
+                let urls = m.url_list();
+                let details = m.details();
+                let reactions = m.reaction_total();
+                crate::types::Message {
+                    message_id: m.id.to_string(),
+                    channel_id: channel_id.to_string(),
+                    guild_id: None,
+                    author_id: Some(m.author.id.to_string()),
+                    author: m.author.username,
+                    timestamp: m.timestamp,
+                    content: m.content,
+                    attachments: urls,
+                    attachment_details: details,
+                    reactions,
+                }
             })
             .collect())
     }
@@ -942,6 +966,57 @@ struct RawMessage {
     author: RawAuthor,
     content: String,
     timestamp: String,
+    #[serde(default)]
+    attachments: Option<Vec<RawAttachment>>,
+    #[serde(default)]
+    reactions: Option<Vec<RawReaction>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawAttachment {
+    url: String,
+    filename: String,
+    #[serde(default)]
+    content_type: Option<String>,
+    #[serde(default)]
+    size: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct RawReaction {
+    count: i32,
+}
+
+impl RawMessage {
+    /// Legacy URL-only list (back-compat `attachments` field).
+    fn url_list(&self) -> Option<Vec<String>> {
+        self.attachments
+            .as_ref()
+            .map(|a| a.iter().map(|x| x.url.clone()).collect())
+    }
+
+    /// Detailed attachment info (F6 download pipeline).
+    fn details(&self) -> Option<Vec<crate::types::AttachmentInfo>> {
+        self.attachments.as_ref().map(|a| {
+            a.iter()
+                .map(|x| crate::types::AttachmentInfo {
+                    url: x.url.clone(),
+                    filename: x.filename.clone(),
+                    content_type: x.content_type.clone(),
+                    size: x.size,
+                })
+                .collect()
+        })
+    }
+
+    /// Sum of reaction counts (F8).
+    fn reaction_total(&self) -> Option<Vec<crate::types::ReactionInfo>> {
+        self.reactions.as_ref().map(|r| {
+            r.iter()
+                .map(|x| crate::types::ReactionInfo { count: x.count })
+                .collect()
+        })
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -962,6 +1037,39 @@ struct RawSearchMessage {
     author: RawAuthor,
     content: String,
     timestamp: String,
+    #[serde(default)]
+    attachments: Option<Vec<RawAttachment>>,
+    #[serde(default)]
+    reactions: Option<Vec<RawReaction>>,
+}
+
+impl RawSearchMessage {
+    fn url_list(&self) -> Option<Vec<String>> {
+        self.attachments
+            .as_ref()
+            .map(|a| a.iter().map(|x| x.url.clone()).collect())
+    }
+
+    fn details(&self) -> Option<Vec<crate::types::AttachmentInfo>> {
+        self.attachments.as_ref().map(|a| {
+            a.iter()
+                .map(|x| crate::types::AttachmentInfo {
+                    url: x.url.clone(),
+                    filename: x.filename.clone(),
+                    content_type: x.content_type.clone(),
+                    size: x.size,
+                })
+                .collect()
+        })
+    }
+
+    fn reaction_total(&self) -> Option<Vec<crate::types::ReactionInfo>> {
+        self.reactions.as_ref().map(|r| {
+            r.iter()
+                .map(|x| crate::types::ReactionInfo { count: x.count })
+                .collect()
+        })
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

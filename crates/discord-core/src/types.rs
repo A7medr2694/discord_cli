@@ -61,8 +61,24 @@ impl Channel {
     }
 }
 
-/// A message as parsed for output (famasya `MessageItem`-shaped).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A message attachment (F6: download pipeline needs url/filename/type/size).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AttachmentInfo {
+    pub url: String,
+    pub filename: String,
+    #[serde(default)]
+    pub content_type: Option<String>,
+    #[serde(default)]
+    pub size: Option<i64>,
+}
+
+/// A message reaction (F8: reaction_count = sum of counts).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReactionInfo {
+    pub count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
     pub message_id: String,
     pub channel_id: String,
@@ -73,8 +89,15 @@ pub struct Message {
     pub author: String,
     pub timestamp: String,
     pub content: String,
+    /// Attachment URLs (legacy field, kept for back-compat).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<String>>,
+    /// Detailed attachments (url/filename/content_type/size) — F6.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachment_details: Option<Vec<AttachmentInfo>>,
+    /// Reaction counts (F8) — sum of `count` is `reaction_count`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reactions: Option<Vec<ReactionInfo>>,
 }
 
 /// Current user profile (`GET /users/@me`). Field shapes match the
@@ -227,6 +250,8 @@ mod tests {
             timestamp: "2026-01-01T00:00:00Z".into(),
             content: "hello".into(),
             attachments: None,
+            attachment_details: None,
+            reactions: None,
         };
         let v = serde_json::to_value(&m).unwrap();
         assert_eq!(v["message_id"], "1");

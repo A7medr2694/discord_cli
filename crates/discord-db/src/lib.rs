@@ -3,6 +3,10 @@
 pub mod attachments;
 pub mod db;
 
+/// Re-exported so downstream crates can name the connection type without a
+/// direct rusqlite dep.
+pub use rusqlite::Connection;
+
 /// A row in the `messages` table.
 #[derive(Debug, Clone)]
 pub struct MessageRow {
