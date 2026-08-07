@@ -256,3 +256,15 @@ fn presence_help_shows_valid_values() {
     assert!(stdout.contains("online"), "stdout: {stdout}");
     assert!(stdout.contains("invisible"), "stdout: {stdout}");
 }
+
+#[test]
+fn thread_create_help_shows_flags() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["thread-create", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--name"), "stdout: {stdout}");
+    assert!(stdout.contains("--message-id"), "stdout: {stdout}");
+    assert!(stdout.contains("--tags"), "stdout: {stdout}");
+}

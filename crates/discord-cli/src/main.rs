@@ -180,6 +180,26 @@ enum Command {
         /// New status. Omit to show the configured default.
         status: Option<String>,
     },
+    /// Create a thread (standalone, from message, or forum post).
+    ThreadCreate {
+        /// Channel name or ID.
+        channel: String,
+        /// Thread name.
+        #[arg(long)]
+        name: String,
+        /// Create from this message ID (text/announcement parent).
+        #[arg(long)]
+        message_id: Option<String>,
+        /// Starter message content (required for forum; optional standalone).
+        #[arg(long)]
+        text: Option<String>,
+        /// Auto-archive minutes (60|1440|4320|10080; default 1440).
+        #[arg(long)]
+        archive: Option<u32>,
+        /// Comma-separated forum tag IDs.
+        #[arg(long)]
+        tags: Option<String>,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -437,6 +457,25 @@ async fn run() -> ExitCode {
         }
         Some(Command::Presence { status }) => {
             commands::dc::dc_presence(ctx, status.as_deref()).await
+        }
+        Some(Command::ThreadCreate {
+            channel,
+            name,
+            message_id,
+            text,
+            archive,
+            tags,
+        }) => {
+            commands::dc::dc_thread_create(
+                ctx,
+                &channel,
+                &name,
+                message_id.as_deref(),
+                text.as_deref(),
+                archive,
+                tags.as_deref(),
+            )
+            .await
         }
         Some(Command::Edit {
             channel,

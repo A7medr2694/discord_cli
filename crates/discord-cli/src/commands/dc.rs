@@ -145,6 +145,26 @@ pub enum DcCmd {
         /// New status. Omit to show the configured default.
         status: Option<String>,
     },
+    /// Create a thread (standalone, from message, or forum post).
+    ThreadCreate {
+        /// Channel name or ID.
+        channel: String,
+        /// Thread name.
+        #[arg(long)]
+        name: String,
+        /// Create from this message ID (text/announcement parent).
+        #[arg(long)]
+        message_id: Option<String>,
+        /// Starter message content (required for forum; optional standalone).
+        #[arg(long)]
+        text: Option<String>,
+        /// Auto-archive minutes (60|1440|4320|10080; default 1440).
+        #[arg(long)]
+        archive: Option<u32>,
+        /// Comma-separated forum tag IDs.
+        #[arg(long)]
+        tags: Option<String>,
+    },
     /// Edit an own message.
     Edit {
         /// Channel name or ID.
@@ -853,6 +873,69 @@ pub async fn dc_presence(ctx: &DcCtx, status: Option<&str>) -> ExitCode {
     }
 }
 
+/// `dc thread-create <CHANNEL> --name X [--message-id M] [--text T]`
+/// Creates a thread: standalone (type 11), from a message, or a forum post
+/// (starter message auto-defaults to the thread name; Escape-Tech 3 paths).
+pub async fn dc_thread_create(
+    ctx: &DcCtx,
+    channel: &str,
+    name: &str,
+    message_id: Option<&str>,
+    text: Option<&str>,
+    archive: Option<u32>,
+    tags: Option<&str>,
+) -> ExitCode {
+    let mut client = match ctx.client().await {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    let channel_id = match resolve_channel_id(&mut client, channel).await {
+        Ok(id) => id,
+        Err(code) => return code,
+    };
+    let applied_tags = tags.map(|t| {
+        t.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+    });
+    let result = match message_id {
+        Some(mid) => {
+            client
+                .create_thread_from_message(&channel_id, mid, name, archive)
+                .await
+        }
+        None => {
+            client
+                .create_thread(&channel_id, name, archive, text, applied_tags)
+                .await
+        }
+    };
+    match result {
+        Ok(t) => {
+            // Type discriminator (Escape-Tech): forum_post | message_thread |
+            // standalone_thread — derived from channel type + message_id.
+            let kind = if message_id.is_some() {
+                "message_thread"
+            } else if t.channel_type == 15 || t.channel_type == 16 {
+                "forum_post"
+            } else {
+                "standalone_thread"
+            };
+            let data = serde_json::json!({
+                "type": kind,
+                "id": t.id,
+                "name": t.name,
+                "channel_id": t.channel_id,
+                "channel_type": t.channel_type,
+            });
+            let _ = output::emit(&data, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// `dc edit <CHANNEL> <MSG_ID> --text ...`
 pub async fn dc_edit(ctx: &DcCtx, channel: &str, message_id: &str, text: &str) -> ExitCode {
     let mut client = match ctx.client().await {
@@ -1089,6 +1172,25 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         DcCmd::Join { invite, confirm } => dc_join(ctx, &invite, confirm).await,
         DcCmd::Leave { guild, confirm } => dc_leave(ctx, &guild, confirm).await,
         DcCmd::Presence { status } => dc_presence(ctx, status.as_deref()).await,
+        DcCmd::ThreadCreate {
+            channel,
+            name,
+            message_id,
+            text,
+            archive,
+            tags,
+        } => {
+            dc_thread_create(
+                ctx,
+                &channel,
+                &name,
+                message_id.as_deref(),
+                text.as_deref(),
+                archive,
+                tags.as_deref(),
+            )
+            .await
+        }
         DcCmd::Edit {
             channel,
             message_id,
