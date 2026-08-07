@@ -164,6 +164,7 @@ discord watch --keyword "incident" --jsonl
 | `profile [USER_ID]` | User profile (default: self) |
 | `relationships` | Friends / blocked / pending |
 | `threads <CH>` | Active threads (user-token fallback) |
+| `thread-create <CH> --name X [--message-id M] [--text T]` | Create thread (standalone/message/forum) |
 | `pins <CH>` | Pinned messages |
 
 ### Act

@@ -53,6 +53,24 @@ pub struct SendParams {
     pub files: Option<Vec<String>>,
 }
 
+/// Create a thread.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ThreadCreateParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// Thread name.
+    pub name: String,
+    /// Create from this message ID (text/announcement parent).
+    #[serde(default)]
+    pub message_id: Option<String>,
+    /// Starter message content (required for forum; optional standalone).
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Auto-archive minutes (60|1440|4320|10080).
+    #[serde(default)]
+    pub archive: Option<u32>,
+}
+
 /// Set presence (persisted; applies to next tail/watch connect).
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresenceParams {
@@ -273,6 +291,42 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Create a thread (standalone, from message, or forum post).
+    #[tool(
+        description = "Create a thread: standalone, from a message, or a forum post (with starter text)."
+    )]
+    pub async fn create_thread(
+        &self,
+        Parameters(req): Parameters<ThreadCreateParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let result = match req.message_id.as_deref() {
+            Some(mid) => c
+                .create_thread_from_message(&req.channel_id, mid, &req.name, req.archive)
+                .await
+                .map_err(|e| e.to_string())?,
+            None => c
+                .create_thread(
+                    &req.channel_id,
+                    &req.name,
+                    req.archive,
+                    req.text.as_deref(),
+                    None,
+                )
+                .await
+                .map_err(|e| e.to_string())?,
+        };
+        Ok(serde_json::json!({
+            "type": if req.message_id.is_some() { "message_thread" }
+                    else if result.channel_type == 15 || result.channel_type == 16 { "forum_post" }
+                    else { "standalone_thread" },
+            "id": result.id,
+            "name": result.name,
+            "channel_id": result.channel_id,
+        })
+        .to_string())
     }
 
     /// Set presence for future connections (persisted to config.json).
