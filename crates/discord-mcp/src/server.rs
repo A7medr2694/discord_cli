@@ -71,6 +71,51 @@ pub struct ThreadCreateParams {
     pub archive: Option<u32>,
 }
 
+/// Download archived attachments.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct DownloadParams {
+    /// Filter by channel name or ID (from archive).
+    #[serde(default)]
+    pub channel: Option<String>,
+    /// Filter by guild name or ID (from archive).
+    #[serde(default)]
+    pub guild: Option<String>,
+    /// Media type (image|gif|video|all).
+    #[serde(default)]
+    pub media_type: Option<String>,
+    /// Max files (0 = unlimited).
+    #[serde(default)]
+    pub limit: Option<i64>,
+    /// Output directory (default <data_dir>/media).
+    #[serde(default)]
+    pub out_dir: Option<String>,
+    /// Only files from messages on/after this date (30d|6m|1y|YYYY-MM-DD).
+    #[serde(default)]
+    pub since: Option<String>,
+}
+
+/// Parse a `since` value (YYYY-MM-DD or <n><d|m|y>) — mirrors the download
+/// CLI's parse_since so MCP and CLI behave identically.
+fn parse_mcp_since(s: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        return d
+            .and_hms_opt(0, 0, 0)
+            .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc));
+    }
+    let (num, unit) = s.split_at(s.len().saturating_sub(1));
+    let n: i64 = num.parse().ok()?;
+    if n <= 0 {
+        return None;
+    }
+    let now = chrono::Utc::now();
+    match unit {
+        "d" => Some(now - chrono::Duration::days(n)),
+        "m" => Some(now - chrono::Duration::days(30 * n)),
+        "y" => Some(now - chrono::Duration::days(365 * n)),
+        _ => None,
+    }
+}
+
 /// Set presence (persisted; applies to next tail/watch connect).
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresenceParams {
@@ -291,6 +336,59 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Download archived attachments summary (langkurt MCP mirror).
+    ///
+    /// Reports pending attachment count + sample filenames from the local
+    /// archive; the actual fetch is done via the `discord download` CLI
+    /// (the MCP server avoids a binary-only dependency).
+    #[tool(
+        description = "Report archived attachments pending download (sync first); fetch via the download CLI."
+    )]
+    pub async fn download_attachments(
+        &self,
+        Parameters(req): Parameters<DownloadParams>,
+    ) -> Result<String, String> {
+        let db_path = discord_core::config::db_path().map_err(|e| e.to_string())?;
+        let conn = discord_db::db::open(db_path.to_str().unwrap_or("discord.db"))
+            .map_err(|e| e.to_string())?;
+        let mut filter = discord_db::attachments::AttachmentFilter {
+            media_type: req
+                .media_type
+                .filter(|t| *t != "all")
+                .map(|s| s.to_string()),
+            limit: req.limit.unwrap_or(0),
+            ..Default::default()
+        };
+        if let Some(s) = &req.since {
+            let parsed = match parse_mcp_since(s) {
+                Some(t) => t.to_rfc3339(),
+                None => return Err(format!("invalid since \"{s}\" (YYYY-MM-DD or 30d/6m/1y)")),
+            };
+            filter.since = Some(parsed);
+        }
+        if let Some(c) = &req.channel {
+            let id = discord_db::db::find_channel_id(&conn, c)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("channel \"{c}\" not found in archive (sync first)"))?;
+            filter.channel_id = Some(id);
+        }
+        if let Some(g) = &req.guild {
+            let id = discord_db::db::find_guild_id(&conn, g)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("guild \"{g}\" not found in archive"))?;
+            filter.guild_id = Some(id);
+        }
+        let rows = discord_db::attachments::list_pending_attachments(&conn, &filter)
+            .map_err(|e| e.to_string())?;
+        let files: Vec<String> = rows.iter().take(20).map(|a| a.filename.clone()).collect();
+        Ok(serde_json::json!({
+            "pending": rows.len(),
+            "sample_files": files,
+            "note": "run `discord download` (CLI) to actually fetch files",
+        })
+        .to_string())
     }
 
     /// Create a thread (standalone, from message, or forum post).

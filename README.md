@@ -194,6 +194,7 @@ discord watch --keyword "incident" --jsonl
 | `top [-c CH]` | Top senders |
 | `export <CH> [-f json] [-o FILE]` | Export archive |
 | `purge <CH> [-y]` | Delete archive for a channel (gated) |
+| `download [--guild G] [--channel C] [--type T] [--since S] [--min-reactions N] [--out DIR]` | Download archived attachments to disk |
 
 ### Live & AI
 

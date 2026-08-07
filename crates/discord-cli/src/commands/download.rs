@@ -126,7 +126,7 @@ pub async fn dc_download(ctx: &DcCtx, opts: DownloadOpts<'_>) -> ExitCode {
 
     // Build filter. Guild/channel resolved by name via channels table.
     let mut filter = AttachmentFilter {
-        media_type: media_type.filter(|t| t != &"all").map(|s| s.to_string()),
+        media_type: media_type.filter(|t| *t != "all").map(|s| s.to_string()),
         min_reactions,
         limit: limit.unwrap_or(0),
         ..Default::default()
