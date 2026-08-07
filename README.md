@@ -179,6 +179,7 @@ discord watch --keyword "incident" --jsonl
 | `notify guild/channel` | Notification settings |
 | `join <INVITE> [--confirm]` | Preview + join a server via invite code/URL (gated) |
 | `leave <GUILD> [--confirm]` | Leave a server (gated) |
+| `presence [STATUS]` | Show/set presence (online\|idle\|dnd\|invisible; default invisible) |
 
 ### Archive & query (local SQLite + FTS5)
 

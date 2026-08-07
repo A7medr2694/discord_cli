@@ -53,6 +53,13 @@ pub struct SendParams {
     pub files: Option<Vec<String>>,
 }
 
+/// Set presence (persisted; applies to next tail/watch connect).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct PresenceParams {
+    /// online | idle | dnd | invisible.
+    pub status: String,
+}
+
 /// Join a server via invite.
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct JoinParams {
@@ -266,6 +273,26 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Set presence for future connections (persisted to config.json).
+    ///
+    /// The MCP server has no live gateway per invocation, so this persists
+    /// the status — it takes effect on the next `tail`/`watch` connect.
+    #[tool(
+        description = "Set presence status (online|idle|dnd|invisible), persisted for future connections."
+    )]
+    pub async fn set_presence(
+        &self,
+        Parameters(req): Parameters<PresenceParams>,
+    ) -> Result<String, String> {
+        if !discord_core::config::set_configured_presence(&req.status) {
+            return Err(format!(
+                "invalid presence: {} (valid: online, idle, dnd, invisible)",
+                req.status
+            ));
+        }
+        Ok(serde_json::json!({ "presence": req.status, "saved": true }).to_string())
     }
 
     /// Join a server via invite code or URL.

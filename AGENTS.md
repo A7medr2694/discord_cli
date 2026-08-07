@@ -52,6 +52,7 @@ discord watch --typing --jsonl               # also emit typing events as JSONL
 discord typing <CHANNEL>                     # send a typing indicator
 discord join "https://discord.gg/abc123" --confirm   # join a server via invite
 discord leave "old-server" --confirm               # leave a server
+discord presence dnd                                # set presence (online|idle|dnd|invisible)
 ```
 
 ## MCP mode
