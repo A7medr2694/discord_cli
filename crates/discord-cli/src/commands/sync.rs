@@ -28,8 +28,37 @@ pub async fn sync_channel(client: &mut ApiClient, channel_id: &str, limit: usize
     let conn = ddb::open(db_path.to_str().unwrap_or("discord.db"))?;
 
     // Ensure the channel exists in the DB first (foreign-key requirement).
-    // Upsert channel with a placeholder name; the archive query joins on it.
-    ddb::upsert_channel(&conn, channel_id, None, channel_id, 0, None, None)?;
+    // Resolve real name/guild_id/type via the API so archive queries show the
+    // channel name instead of its ID (bug: was `name=channel_id, guild=None`).
+    let (ch_name, ch_guild, ch_type) = match client.get_channel(channel_id).await {
+        Ok(ch) => (
+            if ch.name.is_empty() {
+                channel_id.to_string()
+            } else {
+                ch.name
+            },
+            ch.guild_id,
+            ch.channel_type,
+        ),
+        Err(_) => (channel_id.to_string(), None, 0),
+    };
+    // Populate the guilds table FIRST so the channels FK (guild_id →
+    // guilds.id) is satisfied when upserting the channel (bug: guilds were
+    // never inserted, and the channel carried `guild_id = None`).
+    if let Some(gid) = &ch_guild {
+        if let Ok(info) = client.guild_info(gid).await {
+            let _ = ddb::upsert_guild(&conn, gid, &info.name, None);
+        }
+    }
+    ddb::upsert_channel(
+        &conn,
+        channel_id,
+        ch_guild.as_deref(),
+        &ch_name,
+        ch_type,
+        None,
+        None,
+    )?;
 
     let (last_id, oldest_id) = ddb::get_sync_state(&conn, channel_id)?;
     let mut total = 0usize;
@@ -44,7 +73,7 @@ pub async fn sync_channel(client: &mut ApiClient, channel_id: &str, limit: usize
         .fetch_messages(channel_id, limit, before, None)
         .await?;
     for m in &msgs {
-        ddb::upsert_message(&conn, &row_from_msg(m, channel_id))?;
+        ddb::upsert_message(&conn, &row_from_msg(m, channel_id, ch_guild.as_deref()))?;
         upsert_attachments(&conn, m, channel_id)?;
     }
     total += msgs.len();
@@ -56,7 +85,7 @@ pub async fn sync_channel(client: &mut ApiClient, channel_id: &str, limit: usize
             .fetch_messages(channel_id, limit, None, after)
             .await?;
         for m in &new_msgs {
-            ddb::upsert_message(&conn, &row_from_msg(m, channel_id))?;
+            ddb::upsert_message(&conn, &row_from_msg(m, channel_id, ch_guild.as_deref()))?;
             upsert_attachments(&conn, m, channel_id)?;
         }
         total += new_msgs.len();
@@ -80,11 +109,18 @@ pub async fn sync_channel(client: &mut ApiClient, channel_id: &str, limit: usize
 }
 
 /// Convert a core Message to a db MessageRow.
-fn row_from_msg(m: &discord_core::types::Message, channel_id: &str) -> MessageRow {
+fn row_from_msg(
+    m: &discord_core::types::Message,
+    channel_id: &str,
+    guild_id: Option<&str>,
+) -> MessageRow {
     MessageRow {
         id: m.message_id.clone(),
         channel_id: channel_id.to_string(),
-        guild_id: m.guild_id.clone(),
+        // The Message type from fetch_messages carries no guild_id (only the
+        // channel does), so we thread it through from the resolved channel —
+        // otherwise archive joins show "DM" for every guild (bug).
+        guild_id: guild_id.map(str::to_string).or_else(|| m.guild_id.clone()),
         author_id: m.author_id.clone().unwrap_or_default(),
         author_name: m.author.clone(),
         content: m.content.clone(),
@@ -154,13 +190,13 @@ mod tests {
             Some(vec![ReactionInfo { count: 2 }, ReactionInfo { count: 5 }]),
             None,
         );
-        assert_eq!(row_from_msg(&m, "c").reaction_count, 7);
+        assert_eq!(row_from_msg(&m, "c", None).reaction_count, 7);
     }
 
     #[test]
     fn reaction_count_zero_without_reactions() {
         let m = msg_with(None, None);
-        assert_eq!(row_from_msg(&m, "c").reaction_count, 0);
+        assert_eq!(row_from_msg(&m, "c", None).reaction_count, 0);
     }
 
     #[test]
