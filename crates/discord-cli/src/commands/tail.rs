@@ -29,6 +29,18 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
         }
     };
 
+    // Resolve a channel NAME → ID first (e.g. "general" → snowflake) so the
+    // gateway filter matches. A raw numeric ID passes through unchanged.
+    let resolved_id = if channel_id.chars().all(|c| c.is_ascii_digit()) {
+        channel_id.to_string()
+    } else {
+        let mut api = discord_core::client::ApiClient::with_token(token.clone());
+        match super::dc::resolve_channel_id(&mut api, channel_id).await {
+            Ok(id) => id,
+            Err(code) => return code,
+        }
+    };
+
     let mut client = discord_user::DiscordUser::new(token.clone()).with_status(configured_status()); // stealth default invisible
 
     if let Err(e) = client.init().await {
@@ -39,7 +51,7 @@ pub async fn dc_tail(ctx: &DcCtx, channel_id: &str, once: bool) -> ExitCode {
         ));
     }
 
-    let target = channel_id.to_string();
+    let target = resolved_id;
     let _sub = client
         .on_message_create(move |event| {
             // Only stream from the requested channel (or all if no filter).
@@ -100,7 +112,17 @@ pub async fn dc_watch(
         ));
     }
 
-    let target_ch = channel.map(|s| s.to_string());
+    // Resolve a channel NAME → ID first (gateway compares against snowflake).
+    let target_ch = match channel {
+        Some(ch) if !ch.chars().all(|c| c.is_ascii_digit()) => {
+            let mut api = discord_core::client::ApiClient::with_token(token.clone());
+            match super::dc::resolve_channel_id(&mut api, ch).await {
+                Ok(id) => Some(id),
+                Err(code) => return code,
+            }
+        }
+        other => other.map(|s| s.to_string()),
+    };
     let target_kw = keyword.map(|s| s.to_lowercase());
     // Cache own user id once (skip self typing events).
     let me_id = discord_core::client::ApiClient::with_token(token.clone())

@@ -408,7 +408,10 @@ pub async fn dc_dms(ctx: &DcCtx) -> ExitCode {
 
 /// Resolve a channel name to a channel ID (numeric ID passes through;
 /// otherwise search across the user's guilds). Used by read/history.
-async fn resolve_channel_id(client: &mut ApiClient, channel: &str) -> Result<String, ExitCode> {
+pub(crate) async fn resolve_channel_id(
+    client: &mut ApiClient,
+    channel: &str,
+) -> Result<String, ExitCode> {
     if channel.chars().all(|c| c.is_ascii_digit()) {
         return Ok(channel.to_string());
     }

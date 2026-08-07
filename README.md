@@ -15,7 +15,7 @@
 </div>
 
 **A Discord CLI + MCP server that operates your *user account* — so it sees every server, group, and DM you belong to. No bot invitation required.**  
-Built in Rust for AI agents and terminal-first humans: 74 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
+Built in Rust for AI agents and terminal-first humans: 75 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
 
 > ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`. Admin operations (`channel-*`, `role-*`, `emoji-*`) are the **highest-risk** surface — channel deletion is irreversible and plainly visible. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic. See [docs/ADMIN.md](docs/ADMIN.md) for the permission matrix and ToS risk table.
 
@@ -174,6 +174,7 @@ discord watch --keyword "incident" --jsonl
 | `send <CH> --text "..." [--file PATH]... [--reply ID] [--confirm]` | Send / reply / attach (gated; `--text -` reads stdin) |
 | `edit <CH> <MSG_ID> --text "..."` | Edit own message |
 | `delete <CH> <MSG_ID> [--confirm]` | Delete own message (gated) |
+| `bulk-delete <CH> -n <COUNT> [--confirm]` | Bulk-delete 2-100 recent messages (gated) |
 | `react` / `unreact` | Add / remove a reaction |
 | `pin <CH> <MSG_ID>` | Pin a message |
 | `dm-group create/add/remove` | Group-DM management (gated create) |
@@ -286,7 +287,7 @@ crates/
                   config, types, output envelope
   discord-auth/   token auto-detect (LevelDB scan), paste, keyring, device_id
   discord-db/     SQLite schema, FTS5 search, two-phase sync state
-  discord-cli/    the `discord` binary + 74 commands
+  discord-cli/    the `discord` binary + 75 commands
   discord-mcp/    MCP server (rmcp stdio) — 43 tools
 ```
 
