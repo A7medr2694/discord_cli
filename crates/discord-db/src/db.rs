@@ -41,6 +41,20 @@ fn migrate(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id);
         CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_reactions ON messages(reaction_count DESC);
+
+        -- F6: downloaded-attachment ledger (langkurt attachments.go).
+        -- FK ON DELETE CASCADE: purging a channel removes its attachments
+        -- rows (review#1: REPLACE + FK broke re-sync; CASCADE keeps purge safe).
+        CREATE TABLE IF NOT EXISTS attachments (
+            id TEXT PRIMARY KEY,           -- md5(msg_id|url) hex
+            message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+            channel_id TEXT NOT NULL,
+            url TEXT NOT NULL, filename TEXT NOT NULL,
+            content_type TEXT, size INTEGER, local_path TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_attachments_channel ON attachments(channel_id);
+        CREATE INDEX IF NOT EXISTS idx_attachments_local_path ON attachments(local_path);
 
         CREATE TABLE IF NOT EXISTS sync_state (
             channel_id TEXT PRIMARY KEY,
@@ -70,14 +84,28 @@ fn migrate(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Upsert a message (INSERT OR REPLACE). Returns whether a new row was inserted.
+/// Upsert a message (ON CONFLICT DO UPDATE — NOT INSERT OR REPLACE).
+///
+/// Why: with `PRAGMA foreign_keys=ON` and the F6 `attachments` table
+/// referencing `messages(id)`, REPLACE (delete+insert) would violate the FK
+/// on every re-sync of a channel containing attachments (review#1). UPDATE
+/// preserves the row identity and the FTS triggers handle it.
 pub fn upsert_message(conn: &Connection, msg: &crate::MessageRow) -> Result<bool> {
     let changed = conn
         .execute(
             r#"
-            INSERT OR REPLACE INTO messages
+            INSERT INTO messages
                 (id, channel_id, guild_id, author_id, author_name, content, timestamp, edited, reaction_count)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            ON CONFLICT(id) DO UPDATE SET
+                channel_id = excluded.channel_id,
+                guild_id = excluded.guild_id,
+                author_id = excluded.author_id,
+                author_name = excluded.author_name,
+                content = excluded.content,
+                timestamp = excluded.timestamp,
+                edited = excluded.edited,
+                reaction_count = excluded.reaction_count
             "#,
             params![
                 msg.id,

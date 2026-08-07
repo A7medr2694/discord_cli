@@ -1,5 +1,6 @@
 //! discord-db: SQLite archive for Discord messages.
 
+pub mod attachments;
 pub mod db;
 
 /// A row in the `messages` table.
