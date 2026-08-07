@@ -666,15 +666,15 @@ impl ApiClient {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
+        // PUT .../reactions/{emoji}/@me returns 204 No Content (no body);
+        // `put` would try to parse the empty body as JSON and fail. Use
+        // `put_empty` which discards the response body.
         inner
-            .put::<serde_json::Value, ()>(
-                Route::AddReaction {
-                    channel_id: cid,
-                    message_id: mid,
-                    emoji,
-                },
-                (),
-            )
+            .put_empty(Route::AddReaction {
+                channel_id: cid,
+                message_id: mid,
+                emoji,
+            })
             .await
             .context("react failed")?;
         Ok(())
@@ -706,14 +706,13 @@ impl ApiClient {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let mid: u64 = message_id.parse().context("invalid message id")?;
         let inner = self.inner()?;
+        // PUT .../pins/{mid} returns 204 No Content (no body); `put` would
+        // fail parsing the empty body as JSON. Use `put_empty` instead.
         inner
-            .put::<serde_json::Value, ()>(
-                Route::PinMessage {
-                    channel_id: cid,
-                    message_id: mid,
-                },
-                (),
-            )
+            .put_empty(Route::PinMessage {
+                channel_id: cid,
+                message_id: mid,
+            })
             .await
             .context("pin failed")?;
         Ok(())
@@ -783,14 +782,13 @@ impl ApiClient {
         let cid: u64 = channel_id.parse().context("invalid channel id")?;
         let uid: u64 = user_id.parse().context("invalid user id")?;
         let inner = self.inner()?;
+        // PUT .../recipients/{uid} returns 204 No Content; `put` would fail
+        // parsing the empty body. Use `put_empty` instead.
         inner
-            .put::<serde_json::Value, ()>(
-                Route::GroupDmAddRecipient {
-                    channel_id: cid,
-                    user_id: uid,
-                },
-                (),
-            )
+            .put_empty(Route::GroupDmAddRecipient {
+                channel_id: cid,
+                user_id: uid,
+            })
             .await
             .context("add group DM recipient failed")?;
         Ok(())
