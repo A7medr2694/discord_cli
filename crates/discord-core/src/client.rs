@@ -1095,12 +1095,11 @@ impl ApiClient {
         crate::types::validate_embed(&spec).map_err(|e| anyhow::anyhow!(e))?;
         let inner = self.inner()?;
         let mut msg = discord_user::MessageBuilder::new(inner).channel(channel_id.to_string());
-        if let Some(c) = &spec.content {
-            msg = msg.content(c.clone());
-        }
-        if let Some(r) = &spec.reply_to {
-            msg = msg.reply_to(r.clone());
-        }
+        // Discord REJECTS embed-only messages from user tokens with 50006
+        // "Cannot send an empty message" — the message must carry non-empty
+        // `content` alongside `embeds` (verified empirically + via curl).
+        // When no --content was given but an embed exists, synthesize a
+        // minimal content string so the send succeeds (title, else desc).
         let has_embed = spec.title.is_some()
             || spec.description.is_some()
             || spec.color.is_some()
@@ -1110,6 +1109,24 @@ impl ApiClient {
             || spec.footer.is_some()
             || spec.author.is_some()
             || !spec.fields.is_empty();
+        let content_override = if spec.content.is_none() && has_embed {
+            spec.title
+                .clone()
+                .or_else(|| {
+                    spec.description
+                        .clone()
+                        .map(|d| d.chars().take(200).collect())
+                })
+                .unwrap_or_default()
+        } else {
+            spec.content.clone().unwrap_or_default()
+        };
+        if !content_override.is_empty() {
+            msg = msg.content(content_override);
+        }
+        if let Some(r) = &spec.reply_to {
+            msg = msg.reply_to(r.clone());
+        }
         if has_embed {
             let title = spec.title.clone();
             let description = spec.description.clone();

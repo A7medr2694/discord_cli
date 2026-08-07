@@ -771,6 +771,9 @@ enum Command {
         confirm: bool,
     },
     /// Send a message with a rich embed (requires --confirm unless --dry-run).
+    /// NOTE: user-token accounts cannot render embeds — Discord strips them
+    /// server-side (200 with `embeds:[]`). The message sends, but the rich card
+    /// will not display. Bot tokens render embeds normally.
     Embed {
         /// Channel name or ID.
         channel: String,

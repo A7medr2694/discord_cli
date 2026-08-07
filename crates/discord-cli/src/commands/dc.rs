@@ -2492,13 +2492,14 @@ pub async fn dc_perm_view(ctx: &DcCtx, guild: &str, channel: &str) -> ExitCode {
             return ExitCode::from(output::emit_error("ApiError", &e.to_string(), code));
         }
     };
-    let members = match client.list_members(&guild_id, 1000).await {
-        Ok(m) => m,
-        Err(e) => {
-            let code = classify(&e);
-            return ExitCode::from(output::emit_error("ApiError", &e.to_string(), code));
-        }
-    };
+    // Member-name resolution is best-effort: many guilds return 403 for
+    // GET /guilds/{id}/members to non-admins (or the 1000-cap truncates).
+    // Fall back to raw IDs rather than failing the whole view — role
+    // overwrites are the common case and must still display.
+    let members = client
+        .list_members(&guild_id, 1000)
+        .await
+        .unwrap_or_default();
     let rows: Vec<serde_json::Value> = overwrites
         .iter()
         .map(|ow| {
@@ -2506,7 +2507,14 @@ pub async fn dc_perm_view(ctx: &DcCtx, guild: &str, channel: &str) -> ExitCode {
                 let name = roles
                     .iter()
                     .find(|r| r.id == ow.id)
-                    .map(|r| format!("@{}", r.name))
+                    // Role names like "@everyone" already carry the @ prefix.
+                    .map(|r| {
+                        if r.name.starts_with('@') {
+                            r.name.clone()
+                        } else {
+                            format!("@{}", r.name)
+                        }
+                    })
                     .unwrap_or_else(|| ow.id.clone());
                 (name, "role")
             } else {
