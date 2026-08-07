@@ -232,41 +232,49 @@ pub fn device_id() -> Result<String> {
 mod tests {
     use super::*;
 
+    /// Mutex serializing env-var mutation tests. Rust test threads share the
+    /// process env, so parallel toggling of `DISCORD_TOKEN` was flaky.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Run `f` while holding the env mutex and a snapshot of `DISCORD_TOKEN`.
+    fn with_env_guard<T>(f: impl FnOnce() -> T) -> T {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _env = std::env::var("DISCORD_TOKEN");
+        let r = f();
+        match _env {
+            Ok(v) => std::env::set_var("DISCORD_TOKEN", v),
+            Err(_) => std::env::remove_var("DISCORD_TOKEN"),
+        }
+        r
+    }
+
     #[test]
     fn flag_beats_env() {
-        let _env = std::env::var("DISCORD_TOKEN");
-        std::env::set_var("DISCORD_TOKEN", "envtoken");
-        let r = resolve_token(Some("flagtoken"));
-        assert_eq!(r.unwrap(), "flagtoken");
-        std::env::remove_var("DISCORD_TOKEN");
-        if let Ok(v) = _env {
-            std::env::set_var("DISCORD_TOKEN", v);
-        }
+        with_env_guard(|| {
+            std::env::set_var("DISCORD_TOKEN", "envtoken");
+            let r = resolve_token(Some("flagtoken"));
+            assert_eq!(r.unwrap(), "flagtoken");
+        });
     }
 
     #[test]
     fn env_token_used_when_no_flag() {
-        let _env = std::env::var("DISCORD_TOKEN");
-        std::env::set_var("DISCORD_TOKEN", "envtoken");
-        let r = resolve_token(None);
-        assert_eq!(r.unwrap(), "envtoken");
-        std::env::remove_var("DISCORD_TOKEN");
-        if let Ok(v) = _env {
-            std::env::set_var("DISCORD_TOKEN", v);
-        }
+        with_env_guard(|| {
+            std::env::set_var("DISCORD_TOKEN", "envtoken");
+            let r = resolve_token(None);
+            assert_eq!(r.unwrap(), "envtoken");
+        });
     }
 
     #[test]
     fn missing_token_errors_clearly() {
-        let _env = std::env::var("DISCORD_TOKEN");
-        std::env::remove_var("DISCORD_TOKEN");
-        let r = resolve_token(None);
-        assert!(r.is_err());
-        let msg = r.unwrap_err().to_string();
-        assert!(msg.contains("DISCORD_TOKEN"), "msg: {msg}");
-        if let Ok(v) = _env {
-            std::env::set_var("DISCORD_TOKEN", v);
-        }
+        with_env_guard(|| {
+            std::env::remove_var("DISCORD_TOKEN");
+            let r = resolve_token(None);
+            assert!(r.is_err());
+            let msg = r.unwrap_err().to_string();
+            assert!(msg.contains("DISCORD_TOKEN"), "msg: {msg}");
+        });
     }
 
     #[test]

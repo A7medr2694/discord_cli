@@ -11,7 +11,7 @@ use std::process::ExitCode;
 
 use discord_core::client::ApiClient;
 use discord_core::output::exit;
-use discord_core::types::Channel;
+use discord_core::types::{Channel, Role};
 
 /// Resolve a guild name or ID to a guild ID.
 /// Errors (exit 3) if not found.
@@ -24,6 +24,192 @@ pub async fn resolve_guild(client: &mut ApiClient, name: &str) -> Result<String,
     }
     eprintln!("Guild \"{name}\" not found. Use `discord dc guilds` to list.");
     Err(ExitCode::from(exit::NOT_FOUND))
+}
+
+/// Resolve a channel name or ID within a guild (admin variant).
+///
+/// Uses `get_guild_channels_all` (ALL channel types — unlike the read-path
+/// `resolve_channel` which filters text-like). Semantics (F0):
+/// ID-match first → strip `#` → case-insensitive exact name →
+/// ambiguity → stderr list + exit 2 → not-found → None (caller exits 3).
+pub async fn resolve_channel_admin(
+    client: &mut ApiClient,
+    guild_id: &str,
+    name: &str,
+) -> Result<Option<String>, ExitCode> {
+    let channels = client.get_guild_channels_all(guild_id).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
+
+    // ID match first.
+    if let Some(c) = channels.iter().find(|c| c.id == name) {
+        return Ok(Some(c.id.clone()));
+    }
+
+    // Strip # prefix + case-insensitive exact match.
+    let clean = name.strip_prefix('#').unwrap_or(name);
+    let needle = clean.to_lowercase();
+    let matches: Vec<&Channel> = channels
+        .iter()
+        .filter(|c| c.name.to_lowercase() == needle)
+        .collect();
+
+    match matches.len() {
+        1 => Ok(Some(matches[0].id.clone())),
+        n if n > 1 => {
+            let names: Vec<String> = matches
+                .iter()
+                .map(|m| format!("#{} (type {})", m.name, m.channel_type))
+                .collect();
+            eprintln!(
+                "Ambiguous channel \"{clean}\". Matches: {}",
+                names.join(", ")
+            );
+            Err(ExitCode::from(exit::USAGE))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Resolve a category name or ID within a guild (channel_type == 4).
+/// Same match semantics as `resolve_channel_admin`.
+pub async fn resolve_category(
+    client: &mut ApiClient,
+    guild_id: &str,
+    name: &str,
+) -> Result<Option<String>, ExitCode> {
+    let channels = client.get_guild_channels_all(guild_id).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
+    let categories: Vec<&Channel> = channels.iter().filter(|c| c.channel_type == 4).collect();
+
+    if let Some(c) = categories.iter().find(|c| c.id == name) {
+        return Ok(Some(c.id.clone()));
+    }
+    let clean = name.strip_prefix('#').unwrap_or(name);
+    let needle = clean.to_lowercase();
+    let matches: Vec<&&Channel> = categories
+        .iter()
+        .filter(|c| c.name.to_lowercase() == needle)
+        .collect();
+    match matches.len() {
+        1 => Ok(Some(matches[0].id.clone())),
+        n if n > 1 => {
+            eprintln!("Ambiguous category \"{clean}\". Use an ID instead.");
+            Err(ExitCode::from(exit::USAGE))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Resolve a role name or ID within a guild.
+/// ID-match first, strip `@`/`#`, case-insensitive exact over `list_roles`
+/// (sorted position-desc); ambiguity → stderr + exit 2; not-found → None.
+pub async fn resolve_role(
+    client: &mut ApiClient,
+    guild_id: &str,
+    name: &str,
+) -> Result<Option<String>, ExitCode> {
+    let roles = client.list_roles(guild_id).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
+    if let Some(r) = roles.iter().find(|r| r.id == name) {
+        return Ok(Some(r.id.clone()));
+    }
+    let clean = name.trim_start_matches(['@', '#']);
+    let needle = clean.to_lowercase();
+    let matches: Vec<&Role> = roles
+        .iter()
+        .filter(|r| r.name.to_lowercase() == needle)
+        .collect();
+    match matches.len() {
+        1 => Ok(Some(matches[0].id.clone())),
+        n if n > 1 => {
+            let names: Vec<String> = matches.iter().map(|m| format!("@{}", m.name)).collect();
+            eprintln!("Ambiguous role \"{clean}\". Matches: {}", names.join(", "));
+            Err(ExitCode::from(exit::USAGE))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Resolve a member (bare-ID passthrough; else list_members up to 1000 and
+/// match username/global_name/nick case-insensitively). Ambiguity → exit 2;
+/// not-found → None. Guilds >1000 members are a documented limitation.
+pub async fn resolve_member(
+    client: &mut ApiClient,
+    guild_id: &str,
+    name: &str,
+) -> Result<Option<String>, ExitCode> {
+    if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(Some(name.to_string()));
+    }
+    let members = client.list_members(guild_id, 1000).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
+    let clean = name.trim_start_matches('@').to_lowercase();
+    let matches: Vec<&discord_core::types::Member> = members
+        .iter()
+        .filter(|m| {
+            m.username.to_lowercase() == clean
+                || m.global_name
+                    .as_ref()
+                    .is_some_and(|g| g.to_lowercase() == clean)
+                || m.nick.as_ref().is_some_and(|n| n.to_lowercase() == clean)
+        })
+        .collect();
+    match matches.len() {
+        1 => Ok(Some(matches[0].id.clone())),
+        n if n > 1 => {
+            let names: Vec<String> = matches.iter().map(|m| m.username.clone()).collect();
+            eprintln!("Ambiguous user \"{clean}\". Matches: {}", names.join(", "));
+            Err(ExitCode::from(exit::USAGE))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Resolve a custom emoji by name (`:name:` or bare) or ID.
+/// Name resolution requires a `list_emojis` call; ambiguity → exit 2;
+/// not-found → None.
+pub async fn resolve_emoji(
+    client: &mut ApiClient,
+    guild_id: &str,
+    name_or_id: &str,
+) -> Result<Option<discord_user::types::GuildEmoji>, ExitCode> {
+    let emojis = client.list_emojis(guild_id).await.map_err(|e| {
+        eprintln!("error: {e}");
+        ExitCode::from(exit::ERROR)
+    })?;
+    // Bare-ID passthrough.
+    if let Some(e) = emojis.iter().find(|e| e.id == name_or_id) {
+        return Ok(Some(e.clone()));
+    }
+    let clean = name_or_id
+        .strip_prefix(':')
+        .and_then(|s| s.strip_suffix(':'))
+        .unwrap_or(name_or_id);
+    let needle = clean.to_lowercase();
+    let matches: Vec<&discord_user::types::GuildEmoji> = emojis
+        .iter()
+        .filter(|e| {
+            e.name
+                .as_deref()
+                .is_some_and(|n| n.to_lowercase() == needle)
+        })
+        .collect();
+    match matches.len() {
+        1 => Ok(Some(matches[0].clone())),
+        n if n > 1 => {
+            eprintln!("Ambiguous emoji \"{clean}\". Use an ID instead.");
+            Err(ExitCode::from(exit::USAGE))
+        }
+        _ => Ok(None),
+    }
 }
 
 /// Resolve a channel name or ID within a guild to a Channel.
@@ -75,7 +261,7 @@ pub async fn resolve_channel(
 
 #[cfg(test)]
 mod tests {
-    use discord_core::types::Channel;
+    use discord_core::types::{Channel, Role};
 
     fn ch(id: &str, name: &str, channel_type: u8) -> Channel {
         Channel {
@@ -86,6 +272,8 @@ mod tests {
             topic: None,
             parent_id: None,
             position: Some(0),
+            rate_limit_per_user: None,
+            permission_overwrites: Vec::new(),
         }
     }
 
@@ -122,5 +310,230 @@ mod tests {
             .filter(|c| c.name.to_lowercase() == needle.to_lowercase())
             .collect();
         assert_eq!(matches.len(), 2); // both text + voice "general"
+    }
+
+    // Pure strip/match helpers mirroring the async resolvers (no network).
+    fn strip_channel(name: &str) -> &str {
+        name.strip_prefix('#').unwrap_or(name)
+    }
+
+    fn strip_role(name: &str) -> &str {
+        name.trim_start_matches(['@', '#'])
+    }
+
+    fn strip_emoji(name: &str) -> &str {
+        name.strip_prefix(':')
+            .and_then(|s| s.strip_suffix(':'))
+            .unwrap_or(name)
+    }
+
+    #[test]
+    fn strip_variants() {
+        assert_eq!(strip_channel("#general"), "general");
+        assert_eq!(strip_channel("general"), "general");
+        assert_eq!(strip_role("@admin"), "admin");
+        assert_eq!(strip_role("#admin"), "admin");
+        assert_eq!(strip_role("@#mod"), "mod");
+        assert_eq!(strip_emoji(":party:"), "party");
+        assert_eq!(strip_emoji("party"), "party");
+        assert_eq!(strip_emoji(":a"), ":a");
+    }
+
+    #[test]
+    fn resolve_match_case_insensitive_exact() {
+        let roles = [Role {
+            id: "1".into(),
+            name: "Moderator".into(),
+            color: 0,
+            position: 2,
+            permissions: "0".into(),
+            hoist: false,
+            mentionable: false,
+        }];
+        let m: Vec<&Role> = roles
+            .iter()
+            .filter(|r| r.name.to_lowercase() == "moderator")
+            .collect();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, "1");
+    }
+
+    #[test]
+    fn resolve_role_ambiguity() {
+        let roles = [
+            Role {
+                id: "1".into(),
+                name: "Mod".into(),
+                color: 0,
+                position: 3,
+                permissions: "0".into(),
+                hoist: false,
+                mentionable: false,
+            },
+            Role {
+                id: "2".into(),
+                name: "mod".into(),
+                color: 0,
+                position: 2,
+                permissions: "0".into(),
+                hoist: false,
+                mentionable: false,
+            },
+        ];
+        let needle = "mod";
+        let m: Vec<&Role> = roles
+            .iter()
+            .filter(|r| r.name.to_lowercase() == needle)
+            .collect();
+        assert_eq!(m.len(), 2);
+    }
+
+    #[test]
+    fn member_match_fields() {
+        // Emulates resolve_member's predicate on the three name fields.
+        let members = [
+            discord_core::types::Member {
+                id: "1".into(),
+                username: "alice".into(),
+                global_name: Some("Alice".into()),
+                nick: None,
+                joined_at: None,
+                bot: false,
+            },
+            discord_core::types::Member {
+                id: "2".into(),
+                username: "bob".into(),
+                global_name: None,
+                nick: Some("Bob".into()),
+                joined_at: None,
+                bot: false,
+            },
+        ];
+        let clean = "alice";
+        let m: Vec<_> = members
+            .iter()
+            .filter(|m| {
+                m.username.to_lowercase() == clean
+                    || m.global_name
+                        .as_ref()
+                        .is_some_and(|g| g.to_lowercase() == clean)
+                    || m.nick.as_ref().is_some_and(|n| n.to_lowercase() == clean)
+            })
+            .collect();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, "1");
+    }
+
+    #[test]
+    fn resolve_member_bare_id_passthrough() {
+        // Emulates resolve_member's numeric passthrough predicate.
+        let name = "123456789012345678";
+        assert!(name.chars().all(|c| c.is_ascii_digit()));
+        // Non-numeric falls through to the member-list lookup.
+        let non_numeric = "alice";
+        assert!(!non_numeric.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn member_match_global_name_and_nick() {
+        let members = [
+            discord_core::types::Member {
+                id: "1".into(),
+                username: "alice".into(),
+                global_name: Some("Alice".into()),
+                nick: None,
+                joined_at: None,
+                bot: false,
+            },
+            discord_core::types::Member {
+                id: "2".into(),
+                username: "bob".into(),
+                global_name: None,
+                nick: Some("Bob".into()),
+                joined_at: None,
+                bot: false,
+            },
+        ];
+        // global_name match.
+        let clean = "alice";
+        let m: Vec<_> = members
+            .iter()
+            .filter(|m| {
+                m.username.to_lowercase() == clean
+                    || m.global_name
+                        .as_ref()
+                        .is_some_and(|g| g.to_lowercase() == clean)
+                    || m.nick.as_ref().is_some_and(|n| n.to_lowercase() == clean)
+            })
+            .collect();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, "1");
+        // nick match.
+        let clean = "bob";
+        let m: Vec<_> = members
+            .iter()
+            .filter(|m| {
+                m.username.to_lowercase() == clean
+                    || m.global_name
+                        .as_ref()
+                        .is_some_and(|g| g.to_lowercase() == clean)
+                    || m.nick.as_ref().is_some_and(|n| n.to_lowercase() == clean)
+            })
+            .collect();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, "2");
+    }
+
+    #[test]
+    fn member_not_found_yields_empty() {
+        let members: Vec<discord_core::types::Member> = vec![];
+        let clean = "carol";
+        let m: Vec<_> = members
+            .iter()
+            .filter(|m| {
+                m.username.to_lowercase() == clean
+                    || m.global_name
+                        .as_ref()
+                        .is_some_and(|g| g.to_lowercase() == clean)
+                    || m.nick.as_ref().is_some_and(|n| n.to_lowercase() == clean)
+            })
+            .collect();
+        assert!(m.is_empty());
+    }
+
+    #[test]
+    fn emoji_match_name_or_id() {
+        let emojis = [
+            discord_user::types::GuildEmoji {
+                id: "10".into(),
+                name: Some("party".into()),
+                roles: vec![],
+                user: None,
+                require_colons: true,
+                managed: false,
+                animated: false,
+                available: true,
+            },
+            discord_user::types::GuildEmoji {
+                id: "20".into(),
+                name: Some("sad".into()),
+                roles: vec![],
+                user: None,
+                require_colons: true,
+                managed: false,
+                animated: false,
+                available: true,
+            },
+        ];
+        // ID match.
+        assert!(emojis.iter().any(|e| e.id == "20"));
+        // Name match (strip :).
+        let needle = strip_emoji(":party:");
+        let m: Vec<_> = emojis
+            .iter()
+            .filter(|e| e.name.as_deref().is_some_and(|n| n == needle))
+            .collect();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, "10");
     }
 }

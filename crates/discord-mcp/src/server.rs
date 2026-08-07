@@ -193,6 +193,401 @@ pub struct SearchParams {
     pub limit: Option<u32>,
 }
 
+/// Create a channel (admin).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CreateChannelParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Channel name (1-100 chars, no '#').
+    pub name: String,
+    /// Channel type: text|voice|category|announcement|stage|forum.
+    #[serde(default)]
+    pub channel_type: Option<String>,
+    /// Parent category ID.
+    #[serde(default)]
+    pub category_id: Option<String>,
+    /// Channel topic (≤1024).
+    #[serde(default)]
+    pub topic: Option<String>,
+    /// Slowmode seconds (0-21600).
+    #[serde(default)]
+    pub slowmode: Option<u64>,
+}
+
+/// Edit a channel (admin).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct EditChannelParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// New name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// New topic (≤1024).
+    #[serde(default)]
+    pub topic: Option<String>,
+    /// New slowmode seconds (0-21600).
+    #[serde(default)]
+    pub slowmode: Option<u64>,
+    /// New parent category ID.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// New sorting position.
+    #[serde(default)]
+    pub position: Option<u32>,
+    /// New channel type (0↔5 conversion only).
+    #[serde(default)]
+    pub channel_type: Option<String>,
+}
+
+/// Delete a channel (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct DeleteChannelParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// Must be true to delete (advisory).
+    pub confirm: bool,
+}
+
+/// List roles.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ListRolesParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Max roles (default all).
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// Create a role (admin).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CreateRoleParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Role name.
+    pub name: String,
+    /// Color hex (#RRGGBB or RRGGBB).
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Permission names (comma-separated or list).
+    #[serde(default)]
+    pub permissions: Option<Vec<String>>,
+    /// Allow anyone to mention.
+    #[serde(default)]
+    pub mentionable: Option<bool>,
+    /// Show separately in the member list.
+    #[serde(default)]
+    pub hoist: Option<bool>,
+}
+
+/// Edit a role (admin).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct EditRoleParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The role ID (snowflake).
+    pub role_id: String,
+    /// New name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// New color hex.
+    #[serde(default)]
+    pub color: Option<String>,
+    /// New permission names.
+    #[serde(default)]
+    pub permissions: Option<Vec<String>>,
+    /// New mentionable state.
+    #[serde(default)]
+    pub mentionable: Option<bool>,
+    /// New hoist state.
+    #[serde(default)]
+    pub hoist: Option<bool>,
+}
+
+/// Delete a role (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct DeleteRoleParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The role ID (snowflake).
+    pub role_id: String,
+    /// Must be true to delete (advisory).
+    pub confirm: bool,
+}
+
+/// Assign/remove a role to/from a member.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct RoleMemberParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The member user ID (snowflake).
+    pub user_id: String,
+    /// The role ID (snowflake).
+    pub role_id: String,
+}
+
+/// List custom emojis.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct GuildEmojiParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+}
+
+/// Create a custom emoji (admin).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CreateEmojiParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Emoji name (alphanumeric + underscore).
+    pub name: String,
+    /// Local image file path (png/jpg/gif, ≤256KiB).
+    pub file_path: String,
+}
+
+/// Delete a custom emoji (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct DeleteEmojiParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The emoji ID (snowflake).
+    pub emoji_id: String,
+    /// Must be true to delete (advisory).
+    pub confirm: bool,
+}
+
+/// Kick a member (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct KickMemberParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The member user ID (snowflake).
+    pub user_id: String,
+    /// Audit-log reason (X-Audit-Log-Reason header).
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// Must be true to kick (advisory).
+    pub confirm: bool,
+}
+
+/// Ban a member (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct BanMemberParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The member user ID (snowflake).
+    pub user_id: String,
+    /// Audit-log reason (body `reason`).
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// Delete message history up to this many days (0-7).
+    #[serde(default)]
+    pub delete_message_days: Option<u8>,
+    /// Must be true to ban (advisory).
+    pub confirm: bool,
+}
+
+/// Unban a user (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct UnbanMemberParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The banned user ID (snowflake).
+    pub user_id: String,
+    /// Must be true to unban (advisory).
+    pub confirm: bool,
+}
+
+/// Set a member's nickname (admin; not destructive, no confirm).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SetNicknameParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The member user ID (snowflake).
+    pub user_id: String,
+    /// New nickname (empty clears).
+    pub nickname: String,
+}
+
+/// View a channel's permission overwrites (read-only).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ViewOverwritesParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+}
+
+/// Set a permission overwrite (admin; ≥1 of allow/deny).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SetOverwritesParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// The role ID (exactly one of role_id/user_id required).
+    #[serde(default)]
+    pub role_id: Option<String>,
+    /// The user ID (exactly one of role_id/user_id required).
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// Permission names to allow.
+    #[serde(default)]
+    pub allow: Option<Vec<String>>,
+    /// Permission names to deny.
+    #[serde(default)]
+    pub deny: Option<Vec<String>>,
+}
+
+/// Lock a channel read-only for @everyone (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct LockChannelParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// The guild ID (snowflake); @everyone overwrite target.
+    pub guild_id: String,
+    /// Must be true to lock (advisory).
+    pub confirm: bool,
+}
+
+/// Unlock a channel (admin, gated).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct UnlockChannelParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// The guild ID (snowflake); @everyone overwrite target.
+    pub guild_id: String,
+    /// Must be true to unlock (advisory).
+    pub confirm: bool,
+}
+
+/// Fetch a guild's audit log (read-only; VIEW_AUDIT_LOG).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct AuditLogParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// Filter by the user who performed the action (numeric ID).
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// Filter by action name (e.g. "member_kick", "channel_create"). Resolved
+    /// via the audit-action map; unknown names error.
+    #[serde(default)]
+    pub action_type: Option<String>,
+    /// Max entries (default 50, capped 100).
+    #[serde(default)]
+    pub limit: Option<u8>,
+}
+
+/// List a guild's invites (MANAGE_CHANNELS).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ListInvitesParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+}
+
+/// Create a channel invite (CREATE_INSTANT_INVITE; not destructive).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CreateInviteParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// The channel ID (snowflake; text-like).
+    pub channel_id: String,
+    /// Duration in seconds before expiry (0 = never; default 86400).
+    #[serde(default)]
+    pub max_age: Option<u32>,
+    /// Max uses (0 = unlimited; default 0).
+    #[serde(default)]
+    pub max_uses: Option<u32>,
+    /// Grant temporary membership.
+    #[serde(default)]
+    pub temporary: Option<bool>,
+}
+
+/// Delete an invite (MANAGE_CHANNELS; advisory confirm).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct DeleteInviteParams {
+    /// Invite code or full URL (discord.gg/..., discord.com/invite/...).
+    pub code: String,
+    /// Must be true to delete (advisory — client-side approval).
+    pub confirm: bool,
+}
+
+/// One embed field for `send_embed` (F9).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct EmbedFieldInput {
+    /// Field name (≤256).
+    pub name: String,
+    /// Field value (≤1024).
+    pub value: String,
+    /// Whether to render inline (default false).
+    #[serde(default)]
+    pub inline: bool,
+}
+
+/// Send a message with a rich embed (F9; advisory confirm).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SendEmbedParams {
+    /// The channel ID (snowflake).
+    pub channel_id: String,
+    /// Embed title (≤256).
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Embed description (≤4096).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Embed color hex (#RRGGBB or RRGGBB).
+    #[serde(default)]
+    pub color: Option<String>,
+    /// Clickable title URL.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Image URL.
+    #[serde(default)]
+    pub image: Option<String>,
+    /// Footer text.
+    #[serde(default)]
+    pub footer: Option<String>,
+    /// Author name.
+    #[serde(default)]
+    pub author: Option<String>,
+    /// Embed fields (max 10).
+    #[serde(default)]
+    pub fields: Vec<EmbedFieldInput>,
+    /// Plain text content alongside the embed.
+    #[serde(default)]
+    pub content: Option<String>,
+    /// Reply to this message ID.
+    #[serde(default)]
+    pub reply_to: Option<String>,
+    /// Must be true to send (advisory — client-side approval).
+    pub confirm: bool,
+}
+
+/// Edit guild settings (admin; MANAGE_GUILD).
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct EditGuildParams {
+    /// The guild ID (snowflake).
+    pub guild_id: String,
+    /// New server name (2-100 chars).
+    #[serde(default)]
+    pub name: Option<String>,
+    /// New description (≤120; community servers).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Verification level: none|low|medium|high|very_high.
+    #[serde(default)]
+    pub verification: Option<String>,
+    /// Default notifications: all_messages|only_mentions.
+    #[serde(default)]
+    pub notifications: Option<String>,
+    /// Content filter: disabled|members_without_roles|all_members.
+    #[serde(default)]
+    pub content_filter: Option<String>,
+    /// AFK timeout seconds (60|300|900|1800|3600).
+    #[serde(default)]
+    pub afk_timeout: Option<u32>,
+    /// System channel ID.
+    #[serde(default)]
+    pub system_channel: Option<String>,
+    /// Rules channel ID.
+    #[serde(default)]
+    pub rules_channel: Option<String>,
+}
+
 /// The MCP server.
 #[derive(Clone)]
 pub struct DiscordMcpServer {
@@ -593,6 +988,697 @@ impl DiscordMcpServer {
         })
         .to_string())
     }
+
+    /// Create a guild channel (admin; requires MANAGE_CHANNELS).
+    #[tool(
+        description = "Create a guild channel. channel_type: text|voice|category|announcement|stage|forum."
+    )]
+    pub async fn create_channel(
+        &self,
+        Parameters(req): Parameters<CreateChannelParams>,
+    ) -> Result<String, String> {
+        let ctype: u8 = match req.channel_type.as_deref() {
+            None => 0u8,
+            Some(t) => discord_core::types::parse_channel_type_name(t).ok_or_else(|| {
+                format!(
+                    "invalid channel_type \"{t}\" (valid: text, voice, category, announcement, stage, forum)"
+                )
+            })?,
+        };
+        if !ApiClient::validate_channel_name(&req.name) {
+            return Err(format!(
+                "invalid channel name \"{}\" (1-100 chars, no '#')",
+                req.name
+            ));
+        }
+        if let Some(t) = &req.topic {
+            if !ApiClient::validate_topic(t) {
+                return Err("invalid topic (max 1024 chars)".into());
+            }
+        }
+        if req.slowmode.is_some_and(|s| s > 21_600) {
+            return Err("invalid slowmode (0-21600)".into());
+        }
+        let mut c = self.client()?;
+        let mut cr = discord_user::types::CreateChannelRequest::new(&req.name);
+        cr.channel_type = Some(ctype);
+        cr.parent_id = req.category_id.clone();
+        cr.topic = req.topic.clone();
+        cr.rate_limit_per_user = req.slowmode.map(|s| s as u32);
+        let ch = c
+            .create_channel(&req.guild_id, cr)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&ch).map_err(|e| e.to_string())
+    }
+
+    /// Edit a guild channel (admin).
+    #[tool(description = "Edit a guild channel: rename, topic, slowmode, parent, position, type.")]
+    pub async fn edit_channel(
+        &self,
+        Parameters(req): Parameters<EditChannelParams>,
+    ) -> Result<String, String> {
+        if let Some(n) = &req.name {
+            if !ApiClient::validate_channel_name(n) {
+                return Err(format!(
+                    "invalid channel name \"{n}\" (1-100 chars, no '#')"
+                ));
+            }
+        }
+        if let Some(t) = &req.topic {
+            if !ApiClient::validate_topic(t) {
+                return Err("invalid topic (max 1024 chars)".into());
+            }
+        }
+        let channel_type = match req.channel_type.as_deref() {
+            None => None,
+            Some(t) => Some(
+                discord_core::types::parse_channel_type_name(t).ok_or_else(|| {
+                    format!("invalid channel_type \"{t}\" (text|voice|category|announcement|stage|forum)")
+                })?,
+            ),
+        };
+        let mut c = self.client()?;
+        let er = discord_user::types::EditChannelRequest {
+            name: req.name.clone(),
+            topic: req.topic.clone(),
+            rate_limit_per_user: req.slowmode.map(|s| s as u32),
+            parent_id: req.parent_id.clone(),
+            position: req.position,
+            channel_type,
+            ..Default::default()
+        };
+        let ch = c
+            .edit_channel(&req.channel_id, er)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&ch).map_err(|e| e.to_string())
+    }
+
+    /// Delete a guild channel (admin; confirm gated).
+    #[tool(description = "Delete a guild channel. confirm must be true (advisory).")]
+    pub async fn delete_channel(
+        &self,
+        Parameters(req): Parameters<DeleteChannelParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("delete_channel requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.delete_channel(&req.channel_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "deleted": true, "channel_id": req.channel_id }).to_string())
+    }
+
+    /// List guild roles.
+    #[tool(description = "List roles of a guild (sorted by position, desc).")]
+    pub async fn list_roles(
+        &self,
+        Parameters(req): Parameters<ListRolesParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let roles = c
+            .list_roles(&req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        let out: Vec<_> = match req.limit {
+            Some(n) => roles.into_iter().take(n as usize).collect(),
+            None => roles,
+        };
+        serde_json::to_string(&out).map_err(|e| e.to_string())
+    }
+
+    /// Create a guild role (admin; MANAGE_ROLES).
+    #[tool(description = "Create a guild role with optional color and permission names.")]
+    pub async fn create_role(
+        &self,
+        Parameters(req): Parameters<CreateRoleParams>,
+    ) -> Result<String, String> {
+        let color = match &req.color {
+            Some(c) => Some(ApiClient::parse_color_hex(c).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        let permissions = match &req.permissions {
+            Some(names) => Some(
+                ApiClient::parse_permission_names(names)
+                    .map_err(|e| e.to_string())?
+                    .to_string(),
+            ),
+            None => None,
+        };
+        let mut c = self.client()?;
+        let rr = discord_user::types::CreateRoleRequest {
+            name: Some(req.name.clone()),
+            color,
+            permissions,
+            mentionable: req.mentionable,
+            hoist: req.hoist,
+        };
+        let role = c
+            .create_role(&req.guild_id, rr)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&role).map_err(|e| e.to_string())
+    }
+
+    /// Edit a guild role (admin).
+    #[tool(description = "Edit a guild role: name, color, permissions, mentionable, hoist.")]
+    pub async fn edit_role(
+        &self,
+        Parameters(req): Parameters<EditRoleParams>,
+    ) -> Result<String, String> {
+        let color = match &req.color {
+            Some(c) => Some(ApiClient::parse_color_hex(c).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        let permissions = match &req.permissions {
+            Some(names) => Some(
+                ApiClient::parse_permission_names(names)
+                    .map_err(|e| e.to_string())?
+                    .to_string(),
+            ),
+            None => None,
+        };
+        let mut c = self.client()?;
+        let rr = discord_user::types::CreateRoleRequest {
+            name: req.name.clone(),
+            color,
+            permissions,
+            mentionable: req.mentionable,
+            hoist: req.hoist,
+        };
+        let role = c
+            .edit_role(&req.guild_id, &req.role_id, rr)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&role).map_err(|e| e.to_string())
+    }
+
+    /// Delete a guild role (admin; confirm gated).
+    #[tool(description = "Delete a guild role. confirm must be true (advisory).")]
+    pub async fn delete_role(
+        &self,
+        Parameters(req): Parameters<DeleteRoleParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("delete_role requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.delete_role(&req.guild_id, &req.role_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "deleted": true, "role_id": req.role_id }).to_string())
+    }
+
+    /// Assign a role to a member (admin).
+    #[tool(description = "Assign a role to a member by user_id.")]
+    pub async fn assign_role(
+        &self,
+        Parameters(req): Parameters<RoleMemberParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        c.add_member_role(&req.guild_id, &req.user_id, &req.role_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "assigned": true }).to_string())
+    }
+
+    /// Remove a role from a member (admin).
+    #[tool(description = "Remove a role from a member by user_id.")]
+    pub async fn remove_role(
+        &self,
+        Parameters(req): Parameters<RoleMemberParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        c.remove_member_role(&req.guild_id, &req.user_id, &req.role_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "removed": true }).to_string())
+    }
+
+    /// List custom guild emojis.
+    #[tool(description = "List custom emojis of a guild.")]
+    pub async fn list_emojis(
+        &self,
+        Parameters(req): Parameters<GuildEmojiParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let emojis = c
+            .list_emojis(&req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&emojis).map_err(|e| e.to_string())
+    }
+
+    /// Create a custom guild emoji (admin; ≤256KiB).
+    #[tool(description = "Upload a custom emoji from a local file (png/jpg/gif, ≤256KiB).")]
+    pub async fn create_emoji(
+        &self,
+        Parameters(req): Parameters<CreateEmojiParams>,
+    ) -> Result<String, String> {
+        if !ApiClient::validate_emoji_name(&req.name) {
+            return Err(format!(
+                "invalid emoji name \"{}\" (alphanumeric + underscore, 2-32 chars)",
+                req.name
+            ));
+        }
+        let mut c = self.client()?;
+        let emoji = c
+            .create_emoji(&req.guild_id, &req.name, &req.file_path)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&emoji).map_err(|e| e.to_string())
+    }
+
+    /// Delete a custom guild emoji (admin; confirm gated).
+    #[tool(description = "Delete a custom emoji. confirm must be true (advisory).")]
+    pub async fn delete_emoji(
+        &self,
+        Parameters(req): Parameters<DeleteEmojiParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("delete_emoji requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.delete_emoji(&req.guild_id, &req.emoji_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "deleted": true, "emoji_id": req.emoji_id }).to_string())
+    }
+
+    /// Kick a guild member (admin; KICK_MEMBERS).
+    #[tool(
+        description = "Kick a member from a guild (requires KICK_MEMBERS). confirm must be true (advisory)."
+    )]
+    pub async fn kick_member(
+        &self,
+        Parameters(req): Parameters<KickMemberParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("kick_member requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.kick_member(&req.guild_id, &req.user_id, req.reason.as_deref())
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "kicked": true, "user_id": req.user_id }).to_string())
+    }
+
+    /// Ban a guild member (admin; BAN_MEMBERS).
+    #[tool(
+        description = "Ban a member from a guild (requires BAN_MEMBERS). delete_message_days 0-7. confirm must be true (advisory)."
+    )]
+    pub async fn ban_member(
+        &self,
+        Parameters(req): Parameters<BanMemberParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("ban_member requires confirm: true".into());
+        }
+        if req.delete_message_days.is_some_and(|d| d > 7) {
+            return Err("delete_message_days must be 0-7".into());
+        }
+        let mut c = self.client()?;
+        c.ban_member(
+            &req.guild_id,
+            &req.user_id,
+            req.reason.as_deref(),
+            req.delete_message_days,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "banned": true, "user_id": req.user_id }).to_string())
+    }
+
+    /// Unban a user (admin; BAN_MEMBERS).
+    #[tool(
+        description = "Unban a user from a guild (banned users are not in the member list). confirm must be true (advisory)."
+    )]
+    pub async fn unban_member(
+        &self,
+        Parameters(req): Parameters<UnbanMemberParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("unban_member requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.unban_member(&req.guild_id, &req.user_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "unbanned": true, "user_id": req.user_id }).to_string())
+    }
+
+    /// Set/clear a member's nickname (admin; MANAGE_NICKNAMES).
+    #[tool(
+        description = "Set a member's server nickname (requires MANAGE_NICKNAMES). Empty clears."
+    )]
+    pub async fn set_nickname(
+        &self,
+        Parameters(req): Parameters<SetNicknameParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        // Empty nickname → Some("") so the field is SENT and Discord clears
+        // it (Some("") clears; None would omit the field and be a no-op).
+        let nick = if req.nickname.is_empty() {
+            Some("")
+        } else {
+            Some(req.nickname.as_str())
+        };
+        c.set_nickname(&req.guild_id, &req.user_id, nick)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "nickname_set": true, "user_id": req.user_id }).to_string())
+    }
+
+    /// View a channel's permission overwrites (read-only).
+    #[tool(
+        description = "List a channel's permission overwrites (roles/members) with allow/deny bitfields."
+    )]
+    pub async fn view_overwrites(
+        &self,
+        Parameters(req): Parameters<ViewOverwritesParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let overwrites = c
+            .get_channel_overwrites(&req.channel_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&overwrites).map_err(|e| e.to_string())
+    }
+
+    /// Set a permission overwrite (admin; MANAGE_CHANNELS).
+    #[tool(
+        description = "Set a channel permission overwrite for a role or user. Provide role_id XOR user_id, and ≥1 of allow/deny. Both sides are always transmitted (0 when absent)."
+    )]
+    pub async fn set_overwrites(
+        &self,
+        Parameters(req): Parameters<SetOverwritesParams>,
+    ) -> Result<String, String> {
+        let (overwrite_id, kind) = match (&req.role_id, &req.user_id) {
+            (Some(r), None) => (r.clone(), 0u8),
+            (None, Some(u)) => (u.clone(), 1u8),
+            _ => return Err("set_overwrites requires exactly one of role_id/user_id".into()),
+        };
+        if req.allow.is_none() && req.deny.is_none() {
+            return Err("set_overwrites requires ≥1 of allow/deny".into());
+        }
+        let allow = match &req.allow {
+            Some(names) => ApiClient::parse_permission_names(names).map_err(|e| e.to_string())?,
+            None => 0,
+        };
+        let deny = match &req.deny {
+            Some(names) => ApiClient::parse_permission_names(names).map_err(|e| e.to_string())?,
+            None => 0,
+        };
+        let mut c = self.client()?;
+        c.edit_channel_permission(&req.channel_id, &overwrite_id, allow, deny, kind)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({
+            "permission_set": true,
+            "channel_id": req.channel_id,
+            "overwrite_id": overwrite_id,
+            "allow": allow.to_string(),
+            "deny": deny.to_string(),
+        })
+        .to_string())
+    }
+
+    /// Lock a channel read-only for @everyone (admin; gated).
+    #[tool(
+        description = "Deny SEND_MESSAGES|SEND_MESSAGES_IN_THREADS|CREATE_PUBLIC_THREADS for @everyone (read-only). confirm must be true (advisory)."
+    )]
+    pub async fn lock_channel(
+        &self,
+        Parameters(req): Parameters<LockChannelParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("lock_channel requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.lock_channel(&req.channel_id, &req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "locked": true, "channel_id": req.channel_id }).to_string())
+    }
+
+    /// Unlock a channel (admin; gated).
+    #[tool(
+        description = "Delete the @everyone overwrite, restoring send access. confirm must be true (advisory)."
+    )]
+    pub async fn unlock_channel(
+        &self,
+        Parameters(req): Parameters<UnlockChannelParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("unlock_channel requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.unlock_channel(&req.channel_id, &req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::json!({ "unlocked": true, "channel_id": req.channel_id }).to_string())
+    }
+
+    /// Edit guild settings (admin; MANAGE_GUILD).
+    #[tool(
+        description = "Edit guild settings: name, description, verification, notifications, content-filter, afk-timeout, system/rules channels. Reversible; no confirm. Requires MANAGE_GUILD."
+    )]
+    pub async fn edit_guild(
+        &self,
+        Parameters(req): Parameters<EditGuildParams>,
+    ) -> Result<String, String> {
+        let verification =
+            match &req.verification {
+                Some(v) => Some(discord_core::types::parse_verification_level(v).ok_or_else(
+                    || format!("invalid verification \"{v}\" (none|low|medium|high|very_high)"),
+                )?),
+                None => None,
+            };
+        let notifications =
+            match &req.notifications {
+                Some(n) => Some(discord_core::types::parse_notification_level(n).ok_or_else(
+                    || format!("invalid notifications \"{n}\" (all_messages|only_mentions)"),
+                )?),
+                None => None,
+            };
+        let content_filter = match &req.content_filter {
+            Some(c) => Some(discord_core::types::parse_content_filter(c).ok_or_else(|| {
+                format!(
+                    "invalid content_filter \"{c}\" (disabled|members_without_roles|all_members)"
+                )
+            })?),
+            None => None,
+        };
+        if req
+            .afk_timeout
+            .is_some_and(|t| !matches!(t, 60 | 300 | 900 | 1800 | 3600))
+        {
+            return Err("afk_timeout must be one of 60|300|900|1800|3600".into());
+        }
+        let guild_req = discord_user::types::EditGuildRequest {
+            name: req.name.clone(),
+            description: req.description.clone(),
+            verification_level: verification,
+            default_message_notifications: notifications,
+            explicit_content_filter: content_filter,
+            afk_timeout: req.afk_timeout,
+            system_channel_id: req.system_channel.clone(),
+            rules_channel_id: req.rules_channel.clone(),
+            ..Default::default()
+        };
+        let mut c = self.client()?;
+        let guild = c
+            .edit_guild(&req.guild_id, guild_req)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&guild).map_err(|e| e.to_string())
+    }
+
+    /// Fetch a guild's audit log (read-only; VIEW_AUDIT_LOG).
+    #[tool(
+        description = "Fetch a guild's audit log. action_type is an action NAME (e.g. member_kick, channel_create) resolved to the numeric code; limit capped at 100."
+    )]
+    pub async fn get_audit_logs(
+        &self,
+        Parameters(req): Parameters<AuditLogParams>,
+    ) -> Result<String, String> {
+        let action_type = match req.action_type.as_deref() {
+            Some(name) => {
+                Some(discord_core::types::audit_action_code(name).map_err(|e| e.to_string())?)
+            }
+            None => None,
+        };
+        let user_id = match req.user_id.as_deref() {
+            Some(u) => Some(
+                u.parse::<u64>()
+                    .map_err(|_| format!("invalid user_id \"{u}\""))?,
+            ),
+            None => None,
+        };
+        let mut c = self.client()?;
+        let log = c
+            .audit_logs(&req.guild_id, user_id, action_type, req.limit)
+            .await
+            .map_err(|e| e.to_string())?;
+        // Render agent-friendly rows: action name + username + change summary.
+        let users: std::collections::HashMap<&str, &str> = log
+            .users
+            .iter()
+            .map(|u| (u.id.as_str(), u.username.as_str()))
+            .collect();
+        let rows: Vec<serde_json::Value> = log
+            .audit_log_entries
+            .iter()
+            .map(|e| {
+                let action_name = match discord_core::types::audit_action_name(e.action_type) {
+                    Some(n) => n.to_string(),
+                    None => format!("unknown({})", e.action_type),
+                };
+                let username = e
+                    .user_id
+                    .as_deref()
+                    .and_then(|uid| users.get(uid).map(|u| u.to_string()));
+                let change_summary = {
+                    let mut parts: Vec<String> = Vec::new();
+                    for c in e.changes.iter().take(3) {
+                        let old = c
+                            .old_value
+                            .as_ref()
+                            .map(|v| v.to_string().chars().take(30).collect::<String>());
+                        let new = c
+                            .new_value
+                            .as_ref()
+                            .map(|v| v.to_string().chars().take(30).collect::<String>());
+                        match (old, new) {
+                            (Some(o), Some(n)) => parts.push(format!("{}: {o} → {n}", c.key)),
+                            (None, Some(n)) => parts.push(format!("{}: {n}", c.key)),
+                            (Some(o), None) => parts.push(format!("{}: {o} → (removed)", c.key)),
+                            (None, None) => parts.push(c.key.clone()),
+                        }
+                    }
+                    if parts.is_empty() {
+                        None
+                    } else {
+                        Some(parts.join("; "))
+                    }
+                };
+                serde_json::json!({
+                    "id": e.id,
+                    "user_id": e.user_id,
+                    "username": username,
+                    "action_type": e.action_type,
+                    "action_name": action_name,
+                    "target_id": e.target_id,
+                    "reason": e.reason,
+                    "change_summary": change_summary,
+                })
+            })
+            .collect();
+        serde_json::to_string(&rows).map_err(|e| e.to_string())
+    }
+
+    /// List a guild's invites (MANAGE_CHANNELS).
+    #[tool(description = "List a guild's invites (requires MANAGE_CHANNELS).")]
+    pub async fn list_invites(
+        &self,
+        Parameters(req): Parameters<ListInvitesParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let invites = c
+            .list_guild_invites(&req.guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&invites).map_err(|e| e.to_string())
+    }
+
+    /// Create a channel invite (CREATE_INSTANT_INVITE; not destructive).
+    #[tool(
+        description = "Create a guild invite for a text channel. Sets unique=true (one-time link). Not destructive; no confirm needed."
+    )]
+    pub async fn create_invite(
+        &self,
+        Parameters(req): Parameters<CreateInviteParams>,
+    ) -> Result<String, String> {
+        let mut c = self.client()?;
+        let inv_req = discord_user::types::CreateInviteRequest {
+            max_age: req.max_age,
+            max_uses: req.max_uses,
+            temporary: req.temporary,
+            unique: Some(true),
+            ..Default::default()
+        };
+        let inv = c
+            .create_channel_invite(&req.channel_id, inv_req)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&inv).map_err(|e| e.to_string())
+    }
+
+    /// Delete an invite by code or URL (MANAGE_CHANNELS; advisory confirm).
+    #[tool(description = "Delete an invite by code or full URL. confirm must be true (advisory).")]
+    pub async fn delete_invite(
+        &self,
+        Parameters(req): Parameters<DeleteInviteParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("delete_invite requires confirm: true".into());
+        }
+        let mut c = self.client()?;
+        c.delete_invite(&req.code)
+            .await
+            .map_err(|e| e.to_string())?;
+        let bare = ApiClient::extract_invite_code(&req.code)
+            .unwrap_or(&req.code)
+            .to_string();
+        Ok(serde_json::json!({ "deleted": true, "code": bare }).to_string())
+    }
+
+    /// Send a message with a rich embed (F9; advisory confirm).
+    #[tool(
+        description = "Send a message with a rich embed. Requires ≥1 of title/description/content. confirm must be true (advisory)."
+    )]
+    pub async fn send_embed(
+        &self,
+        Parameters(req): Parameters<SendEmbedParams>,
+    ) -> Result<String, String> {
+        if !req.confirm {
+            return Err("send_embed requires confirm: true".into());
+        }
+        let color = match &req.color {
+            Some(c) => Some(ApiClient::parse_color_hex(c).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        let spec = discord_core::types::EmbedSpec {
+            title: req.title.clone(),
+            description: req.description.clone(),
+            color,
+            url: req.url.clone(),
+            image_url: req.image.clone(),
+            thumbnail_url: None,
+            footer: req.footer.clone(),
+            author: req.author.clone(),
+            fields: req
+                .fields
+                .iter()
+                .map(|f| discord_core::types::EmbedFieldSpec {
+                    name: f.name.clone(),
+                    value: f.value.clone(),
+                    inline: f.inline,
+                })
+                .collect(),
+            content: req.content.clone(),
+            reply_to: req.reply_to.clone(),
+        };
+        discord_core::types::validate_embed(&spec).map_err(|e| e.to_string())?;
+        let mut c = self.client()?;
+        let msg = c
+            .send_embed(&req.channel_id, spec)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&msg).map_err(|e| e.to_string())
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -600,7 +1686,9 @@ impl ServerHandler for DiscordMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "Discord CLI MCP server. Manage the logged-in Discord user account: \
-             list servers/channels/DMs, read and send messages, search. \
+             list servers/channels/DMs, read and send messages, search, and \
+             admin ops (channel/role/emoji/member/permission/server/invite \
+             CRUD, audit logs, embeds — destructive ops gated by confirm:true). \
              ToS: automating a user account may violate Discord ToS.",
         )
     }

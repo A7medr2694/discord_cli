@@ -401,6 +401,419 @@ enum Command {
     },
     /// Start the MCP server (stdio) for AI agents.
     Serve,
+    /// Create a channel (admin; MANAGE_CHANNELS).
+    ChannelCreate {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name (1-100 chars, no '#').
+        name: String,
+        /// Channel type (text|voice|category|announcement|stage|forum).
+        #[arg(long, default_value = "text")]
+        r#type: String,
+        /// Parent category name or ID.
+        #[arg(long)]
+        category: Option<String>,
+        /// Channel topic (≤1024 chars).
+        #[arg(long)]
+        topic: Option<String>,
+        /// Slowmode seconds (0-21600).
+        #[arg(long)]
+        slowmode: Option<u64>,
+        /// Preview without creating.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Rename a channel (admin).
+    ChannelRename {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// New name (1-100 chars, no '#').
+        new_name: String,
+        /// Preview without changing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set a channel topic (admin).
+    ChannelTopic {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// New topic (≤1024 chars).
+        topic: String,
+    },
+    /// Move a channel to a category and/or position (admin).
+    ChannelMove {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Target category name or ID.
+        #[arg(long)]
+        category: Option<String>,
+        /// Sorting position.
+        #[arg(long)]
+        position: Option<u32>,
+    },
+    /// Clone a channel (same type/parent/topic).
+    ChannelClone {
+        /// Guild name or ID.
+        guild: String,
+        /// Source channel name or ID.
+        channel: String,
+        /// Override the cloned name.
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Set slowmode on a channel (admin).
+    ChannelSlowmode {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Slowmode seconds (0-21600).
+        seconds: u64,
+    },
+    /// Delete a channel (admin; requires --confirm).
+    ChannelDelete {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Create a role (admin; MANAGE_ROLES).
+    RoleCreate {
+        /// Guild name or ID.
+        guild: String,
+        /// Role name.
+        name: String,
+        /// Color hex (#RRGGBB or RRGGBB).
+        #[arg(long)]
+        color: Option<String>,
+        /// Comma-separated permission names.
+        #[arg(long)]
+        permissions: Option<String>,
+        /// Allow anyone to mention this role.
+        #[arg(long)]
+        mentionable: bool,
+        /// Show separately in the member list.
+        #[arg(long)]
+        hoist: bool,
+        /// Preview without creating.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Edit a role (admin; ≥1 option required).
+    RoleEdit {
+        /// Guild name or ID.
+        guild: String,
+        /// Role name or ID.
+        role: String,
+        /// New name.
+        #[arg(long)]
+        name: Option<String>,
+        /// New color hex (#RRGGBB or RRGGBB).
+        #[arg(long)]
+        color: Option<String>,
+        /// New comma-separated permissions.
+        #[arg(long)]
+        permissions: Option<String>,
+        /// Allow anyone to mention (--no-mentionable to disallow).
+        #[arg(long)]
+        mentionable: Option<bool>,
+        /// Show separately (--no-hoist to hide).
+        #[arg(long)]
+        hoist: Option<bool>,
+        /// Preview without changing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete a role (admin; requires --confirm).
+    RoleDelete {
+        /// Guild name or ID.
+        guild: String,
+        /// Role name or ID.
+        role: String,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Assign a role to a member (admin; MANAGE_ROLES).
+    RoleAssign {
+        /// Guild name or ID.
+        guild: String,
+        /// Role name or ID.
+        role: String,
+        /// Member username or ID.
+        user: String,
+    },
+    /// Remove a role from a member (admin).
+    RoleRemove {
+        /// Guild name or ID.
+        guild: String,
+        /// Role name or ID.
+        role: String,
+        /// Member username or ID.
+        user: String,
+    },
+    /// List custom emojis (admin).
+    EmojiList {
+        /// Guild name or ID.
+        guild: String,
+        /// Max emojis to show (default all).
+        #[arg(long)]
+        count: Option<u32>,
+    },
+    /// Upload a custom emoji (admin; ≤256KiB png/jpg/gif).
+    EmojiUpload {
+        /// Guild name or ID.
+        guild: String,
+        /// Emoji name (alphanumeric + underscore).
+        name: String,
+        /// Image file path.
+        file: String,
+    },
+    /// Delete a custom emoji (admin; requires --confirm).
+    EmojiDelete {
+        /// Guild name or ID.
+        guild: String,
+        /// Emoji name (:name:) or ID.
+        emoji: String,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Kick a member (admin; KICK_MEMBERS; requires --confirm).
+    MemberKick {
+        /// Guild name or ID.
+        guild: String,
+        /// Member username, global name, nick, or ID.
+        user: String,
+        /// Audit-log reason (X-Audit-Log-Reason header).
+        #[arg(long)]
+        reason: Option<String>,
+        /// Confirm the kick.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Ban a member (admin; BAN_MEMBERS; requires --confirm).
+    MemberBan {
+        /// Guild name or ID.
+        guild: String,
+        /// Member username, global name, nick, or ID.
+        user: String,
+        /// Audit-log reason (body `reason`).
+        #[arg(long)]
+        reason: Option<String>,
+        /// Delete message history up to this many days (0-7).
+        #[arg(long, value_name = "DAYS")]
+        delete_days: Option<u8>,
+        /// Confirm the ban.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Unban a user (admin; BAN_MEMBERS; requires --confirm).
+    MemberUnban {
+        /// Guild name or ID.
+        guild: String,
+        /// Banned user ID (not a guild member).
+        user: String,
+        /// Confirm the unban.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Set/clear a member's nickname (admin; MANAGE_NICKNAMES).
+    MemberNick {
+        /// Guild name or ID.
+        guild: String,
+        /// Member username, global name, nick, or ID.
+        user: String,
+        /// New nickname (empty clears).
+        nickname: String,
+    },
+    /// View a channel's permission overwrites (admin).
+    PermView {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+    },
+    /// Set a role's channel permission overwrite (admin; MANAGE_CHANNELS).
+    PermSet {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Role name or ID.
+        role: String,
+        /// Comma-separated permissions to allow.
+        #[arg(long)]
+        allow: Option<String>,
+        /// Comma-separated permissions to deny.
+        #[arg(long)]
+        deny: Option<String>,
+    },
+    /// Lock a channel read-only for @everyone (admin; requires --confirm).
+    PermLock {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Preview the @everyone deny without applying.
+        #[arg(long)]
+        dry_run: bool,
+        /// Confirm the lock.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Unlock a channel locked via perm-lock (admin; requires --confirm).
+    PermUnlock {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID.
+        channel: String,
+        /// Confirm the unlock.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// List available permission names and their bits.
+    PermList,
+    /// Edit server settings (admin; MANAGE_GUILD; ≥1 option required).
+    ServerSet {
+        /// Guild name or ID.
+        guild: String,
+        /// New server name (2-100 chars).
+        #[arg(long)]
+        name: Option<String>,
+        /// New description (≤120; community servers).
+        #[arg(long)]
+        description: Option<String>,
+        /// Verification level: none|low|medium|high|very_high.
+        #[arg(long)]
+        verification: Option<String>,
+        /// Default notifications: all_messages|only_mentions.
+        #[arg(long)]
+        notifications: Option<String>,
+        /// Content filter: disabled|members_without_roles|all_members.
+        #[arg(long)]
+        content_filter: Option<String>,
+        /// AFK timeout seconds (60|300|900|1800|3600).
+        #[arg(long)]
+        afk_timeout: Option<u32>,
+        /// System channel ID.
+        #[arg(long)]
+        system_channel: Option<String>,
+        /// Rules channel ID.
+        #[arg(long)]
+        rules_channel: Option<String>,
+        /// Preview the payload without applying.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set the server icon (admin; MANAGE_GUILD; ≤256KiB png/jpg/gif).
+    ServerIcon {
+        /// Guild name or ID.
+        guild: String,
+        /// Image file path.
+        file: String,
+    },
+    /// View the guild audit log (admin; VIEW_AUDIT_LOG).
+    AuditLog {
+        /// Guild name or ID.
+        guild: String,
+        /// Max entries (default 50, capped 100).
+        #[arg(short, long, default_value_t = 50)]
+        count: u8,
+        /// Filter by action name (e.g. member_kick, channel_create).
+        #[arg(long, value_name = "ACTION")]
+        r#type: Option<String>,
+        /// Filter by the user who performed the action (numeric ID).
+        #[arg(long)]
+        user: Option<String>,
+    },
+    /// List audit-log action type names and codes (local, no API).
+    AuditTypes,
+    /// List a guild's invites (admin; MANAGE_CHANNELS).
+    InviteList {
+        /// Guild name or ID.
+        guild: String,
+    },
+    /// Create an invite for a text channel (admin; CREATE_INSTANT_INVITE).
+    InviteCreate {
+        /// Guild name or ID.
+        guild: String,
+        /// Channel name or ID (text-like).
+        channel: String,
+        /// Duration in seconds before expiry (0 = never; default 86400).
+        #[arg(long)]
+        max_age: Option<u32>,
+        /// Max uses (0 = unlimited; default 0).
+        #[arg(long)]
+        max_uses: Option<u32>,
+        /// Grant temporary membership.
+        #[arg(long)]
+        temporary: bool,
+    },
+    /// Delete an invite by code or URL (admin; MANAGE_CHANNELS).
+    InviteDelete {
+        /// Invite code or full URL (discord.gg/..., discord.com/invite/...).
+        code: String,
+        /// Guild name or ID (context only).
+        #[arg(long)]
+        guild: Option<String>,
+        /// Confirm deletion.
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Send a message with a rich embed (requires --confirm unless --dry-run).
+    Embed {
+        /// Channel name or ID.
+        channel: String,
+        /// Embed title (≤256).
+        #[arg(long)]
+        title: Option<String>,
+        /// Embed description (≤4096).
+        #[arg(long)]
+        description: Option<String>,
+        /// Embed color hex (#RRGGBB or RRGGBB).
+        #[arg(long)]
+        color: Option<String>,
+        /// Clickable title URL.
+        #[arg(long)]
+        url: Option<String>,
+        /// Image URL.
+        #[arg(long)]
+        image: Option<String>,
+        /// Thumbnail URL.
+        #[arg(long)]
+        thumbnail: Option<String>,
+        /// Footer text.
+        #[arg(long)]
+        footer: Option<String>,
+        /// Author name.
+        #[arg(long)]
+        author: Option<String>,
+        /// Field 'Name|Value' or 'Name|Value|inline' (repeatable).
+        #[arg(long)]
+        field: Vec<String>,
+        /// Plain text content alongside the embed.
+        #[arg(long)]
+        content: Option<String>,
+        /// Reply to a message id.
+        #[arg(long)]
+        reply: Option<String>,
+        /// Confirm sending (never interactive).
+        #[arg(long)]
+        confirm: bool,
+        /// Preview the embed without sending.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -623,6 +1036,286 @@ async fn run() -> ExitCode {
         Some(Command::Purge { channel, yes }) => commands::local::cmd_purge(&channel, yes, format),
         Some(Command::Auth { save, paste, qr }) => cmd_auth(save, paste, qr, format).await,
         Some(Command::Serve) => cmd_serve().await,
+        Some(Command::ChannelCreate {
+            guild,
+            name,
+            r#type,
+            category,
+            topic,
+            slowmode,
+            dry_run,
+        }) => {
+            commands::dc::dc_channel_create(
+                ctx,
+                commands::dc::ChannelCreateOpts {
+                    guild: &guild,
+                    name: &name,
+                    channel_type: &r#type,
+                    category: category.as_deref(),
+                    topic: topic.as_deref(),
+                    slowmode,
+                    dry_run,
+                },
+            )
+            .await
+        }
+        Some(Command::ChannelRename {
+            guild,
+            channel,
+            new_name,
+            dry_run,
+        }) => commands::dc::dc_channel_rename(ctx, &guild, &channel, &new_name, dry_run).await,
+        Some(Command::ChannelTopic {
+            guild,
+            channel,
+            topic,
+        }) => commands::dc::dc_channel_topic(ctx, &guild, &channel, &topic).await,
+        Some(Command::ChannelMove {
+            guild,
+            channel,
+            category,
+            position,
+        }) => {
+            commands::dc::dc_channel_move(ctx, &guild, &channel, category.as_deref(), position)
+                .await
+        }
+        Some(Command::ChannelClone {
+            guild,
+            channel,
+            name,
+        }) => commands::dc::dc_channel_clone(ctx, &guild, &channel, name.as_deref()).await,
+        Some(Command::ChannelSlowmode {
+            guild,
+            channel,
+            seconds,
+        }) => commands::dc::dc_channel_slowmode(ctx, &guild, &channel, seconds).await,
+        Some(Command::ChannelDelete {
+            guild,
+            channel,
+            confirm,
+        }) => commands::dc::dc_channel_delete(ctx, &guild, &channel, confirm).await,
+        Some(Command::RoleCreate {
+            guild,
+            name,
+            color,
+            permissions,
+            mentionable,
+            hoist,
+            dry_run,
+        }) => {
+            commands::dc::dc_role_create(
+                ctx,
+                commands::dc::RoleCreateOpts {
+                    guild: &guild,
+                    name: &name,
+                    color: color.as_deref(),
+                    permissions: permissions.as_deref(),
+                    mentionable,
+                    hoist,
+                    dry_run,
+                },
+            )
+            .await
+        }
+        Some(Command::RoleEdit {
+            guild,
+            role,
+            name,
+            color,
+            permissions,
+            mentionable,
+            hoist,
+            dry_run,
+        }) => {
+            commands::dc::dc_role_edit(
+                ctx,
+                commands::dc::RoleEditOpts {
+                    guild: &guild,
+                    role: &role,
+                    name: name.as_deref(),
+                    color: color.as_deref(),
+                    permissions: permissions.as_deref(),
+                    mentionable,
+                    hoist,
+                    dry_run,
+                },
+            )
+            .await
+        }
+        Some(Command::RoleDelete {
+            guild,
+            role,
+            confirm,
+        }) => commands::dc::dc_role_delete(ctx, &guild, &role, confirm).await,
+        Some(Command::RoleAssign { guild, role, user }) => {
+            commands::dc::dc_role_assign(ctx, &guild, &role, &user).await
+        }
+        Some(Command::RoleRemove { guild, role, user }) => {
+            commands::dc::dc_role_remove(ctx, &guild, &role, &user).await
+        }
+        Some(Command::EmojiList { guild, count }) => {
+            commands::dc::dc_emoji_list(ctx, &guild, count).await
+        }
+        Some(Command::EmojiUpload { guild, name, file }) => {
+            commands::dc::dc_emoji_upload(ctx, &guild, &name, &file).await
+        }
+        Some(Command::EmojiDelete {
+            guild,
+            emoji,
+            confirm,
+        }) => commands::dc::dc_emoji_delete(ctx, &guild, &emoji, confirm).await,
+        Some(Command::MemberKick {
+            guild,
+            user,
+            reason,
+            confirm,
+        }) => commands::dc::dc_member_kick(ctx, &guild, &user, reason.as_deref(), confirm).await,
+        Some(Command::MemberBan {
+            guild,
+            user,
+            reason,
+            delete_days,
+            confirm,
+        }) => {
+            commands::dc::dc_member_ban(ctx, &guild, &user, reason.as_deref(), delete_days, confirm)
+                .await
+        }
+        Some(Command::MemberUnban {
+            guild,
+            user,
+            confirm,
+        }) => commands::dc::dc_member_unban(ctx, &guild, &user, confirm).await,
+        Some(Command::MemberNick {
+            guild,
+            user,
+            nickname,
+        }) => commands::dc::dc_member_nick(ctx, &guild, &user, &nickname).await,
+        Some(Command::PermView { guild, channel }) => {
+            commands::dc::dc_perm_view(ctx, &guild, &channel).await
+        }
+        Some(Command::PermSet {
+            guild,
+            channel,
+            role,
+            allow,
+            deny,
+        }) => {
+            commands::dc::dc_perm_set(
+                ctx,
+                &guild,
+                &channel,
+                &role,
+                allow.as_deref(),
+                deny.as_deref(),
+            )
+            .await
+        }
+        Some(Command::PermLock {
+            guild,
+            channel,
+            dry_run,
+            confirm,
+        }) => commands::dc::dc_perm_lock(ctx, &guild, &channel, dry_run, confirm).await,
+        Some(Command::PermUnlock {
+            guild,
+            channel,
+            confirm,
+        }) => commands::dc::dc_perm_unlock(ctx, &guild, &channel, confirm).await,
+        Some(Command::PermList) => commands::dc::dc_perm_list(ctx).await,
+        Some(Command::ServerSet {
+            guild,
+            name,
+            description,
+            verification,
+            notifications,
+            content_filter,
+            afk_timeout,
+            system_channel,
+            rules_channel,
+            dry_run,
+        }) => {
+            commands::dc::dc_server_set(
+                ctx,
+                commands::dc::ServerSetOpts {
+                    guild: &guild,
+                    name: name.as_deref(),
+                    description: description.as_deref(),
+                    verification: verification.as_deref(),
+                    notifications: notifications.as_deref(),
+                    content_filter: content_filter.as_deref(),
+                    afk_timeout,
+                    system_channel: system_channel.as_deref(),
+                    rules_channel: rules_channel.as_deref(),
+                    dry_run,
+                },
+            )
+            .await
+        }
+        Some(Command::ServerIcon { guild, file }) => {
+            commands::dc::dc_server_icon(ctx, &guild, &file).await
+        }
+        Some(Command::AuditLog {
+            guild,
+            count,
+            r#type,
+            user,
+        }) => {
+            commands::dc::dc_audit_log(ctx, &guild, count, r#type.as_deref(), user.as_deref()).await
+        }
+        Some(Command::AuditTypes) => commands::dc::dc_audit_types(ctx).await,
+        Some(Command::InviteList { guild }) => commands::dc::dc_invite_list(ctx, &guild).await,
+        Some(Command::InviteCreate {
+            guild,
+            channel,
+            max_age,
+            max_uses,
+            temporary,
+        }) => {
+            commands::dc::dc_invite_create(ctx, &guild, &channel, max_age, max_uses, temporary)
+                .await
+        }
+        Some(Command::InviteDelete {
+            code,
+            guild,
+            confirm,
+        }) => commands::dc::dc_invite_delete(ctx, &code, guild.as_deref(), confirm).await,
+        Some(Command::Embed {
+            channel,
+            title,
+            description,
+            color,
+            url,
+            image,
+            thumbnail,
+            footer,
+            author,
+            field,
+            content,
+            reply,
+            confirm,
+            dry_run,
+        }) => {
+            commands::dc::dc_embed(
+                ctx,
+                commands::dc::EmbedOpts {
+                    channel: &channel,
+                    title: title.as_deref(),
+                    description: description.as_deref(),
+                    color: color.as_deref(),
+                    url: url.as_deref(),
+                    image: image.as_deref(),
+                    thumbnail: thumbnail.as_deref(),
+                    footer: footer.as_deref(),
+                    author: author.as_deref(),
+                    fields: &field,
+                    content: content.as_deref(),
+                    reply: reply.as_deref(),
+                    confirm,
+                    dry_run,
+                },
+            )
+            .await
+        }
         None => {
             // No subcommand: print help.
             let mut c = Cli::command();

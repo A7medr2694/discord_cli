@@ -15,9 +15,9 @@
 </div>
 
 **A Discord CLI + MCP server that operates your *user account* — so it sees every server, group, and DM you belong to. No bot invitation required.**  
-Built in Rust for AI agents and terminal-first humans: 33 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
+Built in Rust for AI agents and terminal-first humans: 74 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
 
-> ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic.
+> ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`. Admin operations (`channel-*`, `role-*`, `emoji-*`) are the **highest-risk** surface — channel deletion is irreversible and plainly visible. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic. See [docs/ADMIN.md](docs/ADMIN.md) for the permission matrix and ToS risk table.
 
 ---
 
@@ -82,7 +82,7 @@ discord search "meeting notes"
 |---------|----------------|
 | **Sees everything you can** | Reads any server/DM/thread you belong to — no bot invite |
 | **Agent-native output** | JSONL/JSON envelope + exit-code contract on every command |
-| **MCP server** | `discord serve` → 11 tools for Claude Code, Cursor, etc. |
+| **MCP server** | `discord serve` → 43 tools for Claude Code, Cursor, etc. |
 | **Offline archive** | `sync` → SQLite + FTS5 full-text search, `search`/`recent`/`stats`/`top` |
 | **Stealth-aware** | Browser UA + `X-Super-Properties` + `launch_signature` mask + `device_id` |
 | **Safe by default** | `--confirm`/`--dry-run` on destructive ops, bounded sync, rate-limit backoff, invisible presence |
@@ -182,6 +182,45 @@ discord watch --keyword "incident" --jsonl
 | `leave <GUILD> [--confirm]` | Leave a server (gated) |
 | `presence [STATUS]` | Show/set presence (online\|idle\|dnd\|invisible; default invisible) |
 
+### Admin & moderation
+
+| Command | What it does |
+|---------|--------------|
+| `channel-create <GUILD> <NAME> [--type T] [--category C] [--topic T] [--slowmode N] [--dry-run]` | Create a channel (MANAGE_CHANNELS) |
+| `channel-rename <GUILD> <CH> <NAME> [--dry-run]` | Rename a channel |
+| `channel-topic <GUILD> <CH> <TOPIC>` | Set a channel topic (≤1024) |
+| `channel-move <GUILD> <CH> [--category C] [--position N]` | Move a channel (≥1 option) |
+| `channel-clone <GUILD> <CH> [--name N]` | Clone a channel (same type/parent/topic) |
+| `channel-slowmode <GUILD> <CH> <SECONDS>` | Set slowmode (0-21600) |
+| `channel-delete <GUILD> <CH> [--confirm]` | Delete a channel (gated — highest ToS risk) |
+| `role-create <GUILD> <NAME> [--color C] [--permissions P] [--mentionable] [--hoist] [--dry-run]` | Create a role (MANAGE_ROLES) |
+| `role-edit <GUILD> <ROLE> [--name N] [--color C] [--permissions P] [--mentionable] [--no-mentionable] [--hoist] [--no-hoist] [--dry-run]` | Edit a role (≥1 option) |
+| `role-delete <GUILD> <ROLE> [--confirm]` | Delete a role (gated; @everyone guarded) |
+| `role-assign <GUILD> <ROLE> <USER>` | Assign a role to a member |
+| `role-remove <GUILD> <ROLE> <USER>` | Remove a role from a member |
+| `emoji-list <GUILD> [--count N]` | List custom emojis (MANAGE_GUILD_EXPRESSIONS) |
+| `emoji-upload <GUILD> <NAME> <FILE>` | Upload a custom emoji (≤256KiB png/jpg/gif) |
+| `emoji-delete <GUILD> <EMOJI> [--confirm]` | Delete a custom emoji (gated) |
+| `member-kick <GUILD> <USER> [--reason R] [--confirm]` | Kick a member (KICK_MEMBERS; gated) |
+| `member-ban <GUILD> <USER> [--reason R] [--delete-days D] [--confirm]` | Ban a member (BAN_MEMBERS; gated) |
+| `member-unban <GUILD> <USER> [--confirm]` | Unban a user by ID (BAN_MEMBERS; gated) |
+| `member-nick <GUILD> <USER> <NICKNAME>` | Set/clear a member's nickname (MANAGE_NICKNAMES; empty clears) |
+| `perm-view <GUILD> <CHANNEL>` | List a channel's permission overwrites |
+| `perm-set <GUILD> <CHANNEL> <ROLE> [--allow A] [--deny D]` | Set a role's channel overwrite (MANAGE_CHANNELS; ≥1 of allow/deny) |
+| `perm-lock <GUILD> <CHANNEL> [--dry-run] [--confirm]` | Make a channel read-only for @everyone (gated) |
+| `perm-unlock <GUILD> <CHANNEL> [--confirm]` | Remove the @everyone overwrite (gated) |
+| `perm-list` | List permission names → bit table (local) |
+| `server-set <GUILD> [--name N] [--description D] [--verification V] [--notifications N] [--content-filter C] [--afk-timeout T] [--system-channel ID] [--rules-channel ID] [--dry-run]` | Edit server settings (MANAGE_GUILD; ≥1 option) |
+| `server-icon <GUILD> <FILE>` | Set the server icon (≤256KiB png/jpg/gif) |
+| `audit-log <GUILD> [--count N] [--type ACTION] [--user ID]` | View the audit log (VIEW_AUDIT_LOG) |
+| `audit-types` | List audit action names → codes (local) |
+| `invite-list <GUILD>` | List guild invites (MANAGE_CHANNELS) |
+| `invite-create <GUILD> <CHANNEL> [--max-age N] [--max-uses N] [--temporary]` | Create an invite (CREATE_INSTANT_INVITE; unique link) |
+| `invite-delete <CODE\|URL> [--guild G] [--confirm]` | Delete an invite by code/URL (gated) |
+| `embed <CH> --title T [--description D] [--color HEX] [--field 'N\|V\|inline']... [--confirm] [--dry-run]` | Send a rich-embed message (gated; validated) |
+
+Admin ops map 403 → **exit 4**. Full permission matrix + risk table: [docs/ADMIN.md](docs/ADMIN.md).
+
 ### Archive & query (local SQLite + FTS5)
 
 | Command | What it does |
@@ -204,7 +243,7 @@ discord watch --keyword "incident" --jsonl
 | `typing <CH>` | Send a typing indicator (one-shot) |
 | `tail <CH> [--once]` / `watch [--typing]` | Gateway live follow (invisible presence) |
 | `watch [--channel C] [--keyword K]` | Long-running JSONL stream for agents |
-| `serve` | MCP server (stdio, 11 tools) |
+| `serve` | MCP server (stdio, 43 tools) |
 
 ---
 
@@ -247,8 +286,8 @@ crates/
                   config, types, output envelope
   discord-auth/   token auto-detect (LevelDB scan), paste, keyring, device_id
   discord-db/     SQLite schema, FTS5 search, two-phase sync state
-  discord-cli/    the `discord` binary + 33 commands
-  discord-mcp/    MCP server (rmcp stdio) — 11 tools
+  discord-cli/    the `discord` binary + 74 commands
+  discord-mcp/    MCP server (rmcp stdio) — 43 tools
 ```
 
 **Design principles**
@@ -328,8 +367,9 @@ Ctrl+C. They run until interrupted.
 
 ```bash
 cargo build          # debug
-cargo test           # 44 unit/integration tests (no network required)
+cargo test           # 109 unit/integration tests (no network required)
 ./scripts/e2e.sh     # real-token smoke (needs DISCORD_TOKEN)
+./scripts/e2e_admin.sh  # admin/mod flow (needs DISCORD_TOKEN + administered server)
 ```
 
 Repo layout: research clones in `.tmp/` (source of truth for patterns), plan in `COMPREHENSIVEPLANFORDISCORDCLI.md`, task graph in `.beads/`.
