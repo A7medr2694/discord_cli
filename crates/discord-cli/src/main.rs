@@ -260,6 +260,17 @@ enum Command {
         #[arg(long)]
         confirm: bool,
     },
+    /// Bulk-delete recent messages in a channel (2-100; requires --confirm).
+    BulkDelete {
+        /// Channel name or ID.
+        channel: String,
+        /// Number of most-recent messages to delete (2-100).
+        #[arg(short, long, default_value_t = 10)]
+        count: usize,
+        /// Confirm deletion (never interactive).
+        #[arg(long)]
+        confirm: bool,
+    },
     /// Add a reaction.
     React {
         /// Channel name or ID.
@@ -992,6 +1003,11 @@ async fn run() -> ExitCode {
             message_id,
             confirm,
         }) => commands::dc::dc_delete(ctx, &channel, &message_id, confirm).await,
+        Some(Command::BulkDelete {
+            channel,
+            count,
+            confirm,
+        }) => commands::dc::dc_bulk_delete(ctx, &channel, count, confirm).await,
         Some(Command::React {
             channel,
             message_id,
