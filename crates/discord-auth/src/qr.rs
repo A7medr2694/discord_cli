@@ -68,8 +68,23 @@ pub async fn qr_login(timeout_secs: u64) -> Result<String> {
     let mut req = REMOTE_AUTH_URL
         .into_client_request()
         .context("ws request")?;
-    req.headers_mut()
-        .insert("User-Agent", browser_ua().parse().context("ua header")?);
+    let h = req.headers_mut();
+    // Browser-like headers required by Cloudflare on remote-auth-gateway.
+    // Without these the WebSocket upgrade is rejected with 403 (verified
+    // empirically; mirrors discordo http.Headers()).
+    h.insert("User-Agent", browser_ua().parse().context("ua header")?);
+    h.insert("Accept", "*/*".parse().unwrap());
+    h.insert("Accept-Language", "en-US,en;q=0.9".parse().unwrap());
+    h.insert("Origin", "https://discord.com".parse().unwrap());
+    h.insert(
+        "Referer",
+        "https://discord.com/channels/@me".parse().unwrap(),
+    );
+    h.insert("Sec-Fetch-Dest", "empty".parse().unwrap());
+    h.insert("Sec-Fetch-Mode", "cors".parse().unwrap());
+    h.insert("Sec-Fetch-Site", "same-origin".parse().unwrap());
+    h.insert("X-Debug-Options", "bugReporterEnabled".parse().unwrap());
+    h.insert("X-Discord-Locale", "en-US".parse().unwrap());
     let (ws, _) = tokio_tungstenite::connect_async(req)
         .await
         .context("ws connect")?;
