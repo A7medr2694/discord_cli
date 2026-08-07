@@ -343,6 +343,61 @@ pub fn purge_channel(conn: &Connection, channel_id: &str) -> Result<usize> {
     Ok(n)
 }
 
+/// Find a channel ID by name or ID (used by download --channel).
+pub fn find_channel_id(conn: &Connection, name: &str) -> Result<Option<String>> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM channels WHERE id = ?1 OR name = ?2 LIMIT 1")
+        .context("prepare find_channel_id")?;
+    let mut rows = stmt
+        .query(params![name, name])
+        .context("query find_channel_id")?;
+    Ok(rows.next()?.map(|r| r.get(0)).transpose()?)
+}
+
+/// Find a guild ID by name or ID (used by download --guild).
+pub fn find_guild_id(conn: &Connection, name: &str) -> Result<Option<String>> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM guilds WHERE id = ?1 OR name = ?2 LIMIT 1")
+        .context("prepare find_guild_id")?;
+    let mut rows = stmt
+        .query(params![name, name])
+        .context("query find_guild_id")?;
+    Ok(rows.next()?.map(|r| r.get(0)).transpose()?)
+}
+
+/// Guild name for a channel (via channels.guild_id JOIN).
+pub fn guild_name_for_channel(conn: &Connection, channel_id: &str) -> Result<String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT COALESCE(g.name, 'unknown') FROM channels c \
+             LEFT JOIN guilds g ON c.guild_id = g.id WHERE c.id = ?1",
+        )
+        .context("prepare guild_name_for_channel")?;
+    let mut rows = stmt
+        .query(params![channel_id])
+        .context("query guild_name_for_channel")?;
+    Ok(rows
+        .next()?
+        .map(|r| r.get(0))
+        .transpose()?
+        .unwrap_or_else(|| "unknown".into()))
+}
+
+/// Channel name (falls back to the raw ID).
+pub fn channel_name(conn: &Connection, channel_id: &str) -> Result<String> {
+    let mut stmt = conn
+        .prepare("SELECT COALESCE(name, ?2) FROM channels WHERE id = ?1")
+        .context("prepare channel_name")?;
+    let mut rows = stmt
+        .query(params![channel_id, channel_id])
+        .context("query channel_name")?;
+    Ok(rows
+        .next()?
+        .map(|r| r.get(0))
+        .transpose()?
+        .unwrap_or_else(|| channel_id.into()))
+}
+
 /// FTS5 full-text search over stored messages (langkurt SQL, bind verbatim).
 pub fn search_messages(
     conn: &Connection,

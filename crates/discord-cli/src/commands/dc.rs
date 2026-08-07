@@ -249,6 +249,30 @@ pub enum DcCmd {
         #[arg(long)]
         typing: bool,
     },
+    /// Download archived attachments to disk (offline).
+    Download {
+        /// Filter by guild name or ID.
+        #[arg(long)]
+        guild: Option<String>,
+        /// Filter by channel name or ID.
+        #[arg(long)]
+        channel: Option<String>,
+        /// Media type filter (image|gif|video|all).
+        #[arg(long)]
+        r#type: Option<String>,
+        /// Only files from messages on/after this date (30d|6m|1y|YYYY-MM-DD).
+        #[arg(long)]
+        since: Option<String>,
+        /// Only files from messages with at least this many reactions.
+        #[arg(long)]
+        min_reactions: Option<i64>,
+        /// Max files to download (0 = unlimited).
+        #[arg(long)]
+        limit: Option<i64>,
+        /// Output directory (default <data_dir>/media).
+        #[arg(long)]
+        out: Option<String>,
+    },
     /// Group DM management.
     DmGroup {
         #[command(subcommand)]
@@ -1229,6 +1253,29 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         }
         DcCmd::DmGroup { cmd } => dc_dm_group(ctx, cmd).await,
         DcCmd::Notify { cmd } => dc_notify(ctx, cmd).await,
+        DcCmd::Download {
+            guild,
+            channel,
+            r#type,
+            since,
+            min_reactions,
+            limit,
+            out,
+        } => {
+            crate::commands::download::dc_download(
+                ctx,
+                crate::commands::download::DownloadOpts {
+                    guild: guild.as_deref(),
+                    channel: channel.as_deref(),
+                    media_type: r#type.as_deref(),
+                    since: since.as_deref(),
+                    min_reactions,
+                    limit,
+                    out: out.as_deref(),
+                },
+            )
+            .await
+        }
     }
 }
 

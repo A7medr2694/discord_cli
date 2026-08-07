@@ -268,3 +268,15 @@ fn thread_create_help_shows_flags() {
     assert!(stdout.contains("--message-id"), "stdout: {stdout}");
     assert!(stdout.contains("--tags"), "stdout: {stdout}");
 }
+
+#[test]
+fn download_help_shows_flags() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["download", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--since"), "stdout: {stdout}");
+    assert!(stdout.contains("--min-reactions"), "stdout: {stdout}");
+    assert!(stdout.contains("--type"), "stdout: {stdout}");
+}
