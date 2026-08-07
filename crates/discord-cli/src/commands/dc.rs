@@ -8,6 +8,7 @@ use std::process::ExitCode;
 use clap::Subcommand;
 use discord_core::client::ApiClient;
 use discord_core::output::{self, exit, Format};
+use discord_db::db as ddb;
 
 use crate::resolve;
 
@@ -248,6 +249,18 @@ pub enum DcCmd {
         /// Also emit typing-indicator events as JSONL.
         #[arg(long)]
         typing: bool,
+    },
+    /// Top-reacted messages from the archive (hottest first).
+    TopReactions {
+        /// Filter by guild name.
+        #[arg(long)]
+        guild: Option<String>,
+        /// Filter by channel name.
+        #[arg(long)]
+        channel: Option<String>,
+        /// Max results (default 10).
+        #[arg(long)]
+        limit: Option<i64>,
     },
     /// Download archived attachments to disk (offline).
     Download {
@@ -897,6 +910,38 @@ pub async fn dc_presence(ctx: &DcCtx, status: Option<&str>) -> ExitCode {
     }
 }
 
+/// `dc top-reactions [--guild G] [--channel C] [--limit N]`
+/// Hottest messages from the archive by reaction_count (F8). Note: this is
+/// distinct from `top` (top senders) — R2 kept both, zero breakage.
+pub async fn dc_top_reactions(
+    ctx: &DcCtx,
+    guild: Option<&str>,
+    channel: Option<&str>,
+    limit: i64,
+) -> ExitCode {
+    let db_path = match discord_core::config::db_path() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::from(exit::ERROR);
+        }
+    };
+    let conn = match ddb::open(db_path.to_str().unwrap_or("discord.db")) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error opening archive: {e}");
+            return ExitCode::from(exit::ERROR);
+        }
+    };
+    match ddb::top_reacted(&conn, guild, channel, limit) {
+        Ok(rows) => {
+            let _ = output::emit(&rows, ctx.format);
+            ExitCode::from(exit::OK)
+        }
+        Err(e) => ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR)),
+    }
+}
+
 /// `dc thread-create <CHANNEL> --name X [--message-id M] [--text T]`
 /// Creates a thread: standalone (type 11), from a message, or a forum post
 /// (starter message auto-defaults to the thread name; Escape-Tech 3 paths).
@@ -1253,6 +1298,19 @@ pub async fn dispatch(ctx: &DcCtx, cmd: DcCmd) -> ExitCode {
         }
         DcCmd::DmGroup { cmd } => dc_dm_group(ctx, cmd).await,
         DcCmd::Notify { cmd } => dc_notify(ctx, cmd).await,
+        DcCmd::TopReactions {
+            guild,
+            channel,
+            limit,
+        } => {
+            dc_top_reactions(
+                ctx,
+                guild.as_deref(),
+                channel.as_deref(),
+                limit.unwrap_or(10),
+            )
+            .await
+        }
         DcCmd::Download {
             guild,
             channel,

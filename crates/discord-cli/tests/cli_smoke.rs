@@ -290,3 +290,15 @@ fn auth_help_shows_qr_flag() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("--qr"), "stdout: {stdout}");
 }
+
+#[test]
+fn top_reactions_help_shows_flags() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["top-reactions", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--guild"), "stdout: {stdout}");
+    assert!(stdout.contains("--channel"), "stdout: {stdout}");
+    assert!(stdout.contains("--limit"), "stdout: {stdout}");
+}

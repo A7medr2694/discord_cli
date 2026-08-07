@@ -181,6 +181,18 @@ enum Command {
         status: Option<String>,
     },
     /// Download archived attachments to disk (offline).
+    /// Top-reacted messages from the archive (hottest first).
+    TopReactions {
+        /// Filter by guild name.
+        #[arg(long)]
+        guild: Option<String>,
+        /// Filter by channel name.
+        #[arg(long)]
+        channel: Option<String>,
+        /// Max results (default 10).
+        #[arg(long)]
+        limit: Option<i64>,
+    },
     Download {
         /// Filter by guild name or ID.
         #[arg(long)]
@@ -484,6 +496,19 @@ async fn run() -> ExitCode {
         }
         Some(Command::Presence { status }) => {
             commands::dc::dc_presence(ctx, status.as_deref()).await
+        }
+        Some(Command::TopReactions {
+            guild,
+            channel,
+            limit,
+        }) => {
+            commands::dc::dc_top_reactions(
+                ctx,
+                guild.as_deref(),
+                channel.as_deref(),
+                limit.unwrap_or(10),
+            )
+            .await
         }
         Some(Command::Download {
             guild,

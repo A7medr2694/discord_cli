@@ -192,6 +192,7 @@ discord watch --keyword "incident" --jsonl
 | `recent [--hours N]` | Newest stored messages |
 | `stats` | Per-channel counts |
 | `top [-c CH]` | Top senders |
+| `top-reactions [--guild G] [--channel C] [--limit N]` | Hottest messages by reaction count |
 | `export <CH> [-f json] [-o FILE]` | Export archive |
 | `purge <CH> [-y]` | Delete archive for a channel (gated) |
 | `download [--guild G] [--channel C] [--type T] [--since S] [--min-reactions N] [--out DIR]` | Download archived attachments to disk |

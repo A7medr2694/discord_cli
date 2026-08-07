@@ -71,6 +71,20 @@ pub struct ThreadCreateParams {
     pub archive: Option<u32>,
 }
 
+/// Top-reacted messages from the archive.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct TopReactionsParams {
+    /// Filter by guild name.
+    #[serde(default)]
+    pub guild: Option<String>,
+    /// Filter by channel name.
+    #[serde(default)]
+    pub channel: Option<String>,
+    /// Max results (default 10).
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
 /// Download archived attachments.
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct DownloadParams {
@@ -336,6 +350,27 @@ impl DiscordMcpServer {
             .await
             .map_err(|e| e.to_string())?;
         Ok(serde_json::to_string(&msgs).unwrap_or_else(|_| "[]".into()))
+    }
+
+    /// Top-reacted messages from the local archive (sync first).
+    #[tool(
+        description = "Rank archived messages by reaction count (hottest first). Requires prior sync."
+    )]
+    pub async fn top_reactions(
+        &self,
+        Parameters(req): Parameters<TopReactionsParams>,
+    ) -> Result<String, String> {
+        let db_path = discord_core::config::db_path().map_err(|e| e.to_string())?;
+        let conn = discord_db::db::open(db_path.to_str().unwrap_or("discord.db"))
+            .map_err(|e| e.to_string())?;
+        let rows = discord_db::db::top_reacted(
+            &conn,
+            req.guild.as_deref(),
+            req.channel.as_deref(),
+            req.limit.unwrap_or(10),
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()))
     }
 
     /// Download archived attachments summary (langkurt MCP mirror).
