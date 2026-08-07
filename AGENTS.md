@@ -11,6 +11,7 @@ A Rust CLI + MCP server that operates a **user** Discord account (self-bot style
 - **ToS risk**: user-token automation can get the account banned. Never bulk-crawl, never `sync-all` unbounded, always respect rate limits. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic.
 - **Destructive actions require `--confirm`** — the agent must not bypass this.
 - **Never print or log the token.**
+- **Stealth**: real-client headers + X-Super-Properties + masked launch_signature + per-install device_id are active; TLS ClientHello (JA3) spoofing is NOT yet implemented (rustls).
 
 ## Command conventions
 

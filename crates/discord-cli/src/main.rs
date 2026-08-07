@@ -44,6 +44,10 @@ struct Cli {
     #[arg(long, global = true, value_name = "FMT")]
     format: Option<String>,
 
+    /// Reserved: TLS ClientHello (JA3) spoofing is not yet implemented.
+    #[arg(long, global = true)]
+    tls_chrome: bool,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -420,6 +424,16 @@ async fn run() -> ExitCode {
     load_env();
     let cli = Cli::parse();
     let format = output::resolve_format(cli.json, cli.yaml, cli.format.as_deref());
+
+    // Reserved --tls-chrome: honest not-implemented (F9; review#9).
+    // TLS ClientHello (JA3) spoofing needs unstable rustls APIs or a
+    // BoringSSL vendor; reserved for a future feature.
+    if cli.tls_chrome {
+        eprintln!(
+            "--tls-chrome is reserved: TLS ClientHello (JA3) spoofing is not implemented yet."
+        );
+        return ExitCode::from(exit::USAGE);
+    }
 
     // NO_COLOR honored.
     if cli.no_color || std::env::var("NO_COLOR").is_ok() {

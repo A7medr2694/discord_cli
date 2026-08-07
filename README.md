@@ -258,6 +258,8 @@ crates/
 | **Transport first** | `discord-core` wraps `discord-user-rs`; every command is a thin layer |
 | **Agent-first output** | JSONL/JSON envelope + exit codes on every surface |
 | **Stealth by default** | Real-client headers + per-install identity from day one |
+
+> **Stealth status:** The CLI sends real-client browser headers, `X-Super-Properties`, a masked `launch_signature`, per-install `device_id`, and gateway `is_fast_connect`. TLS **ClientHello (JA3)** fingerprinting is **not** yet spoofed (uses rustls) — an optional future feature. `--tls-chrome` is reserved but returns "not implemented" (exit 2).
 | **Safety gating** | `--confirm` / `--dry-run` never interactive |
 | **Local-first archive** | Read once, query forever (SQLite + FTS5) |
 | **Bounded by design** | Sync caps, rate-limit backoff, invisible presence |
