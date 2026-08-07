@@ -522,6 +522,80 @@ impl ApiClient {
         }
     }
 
+    /// `POST /channels/{id}/threads` — create a thread.
+    ///
+    /// - Forum (type 15) requires a starter `message` (defaults to the thread
+    ///   name, Escape-Tech thread-create.js:11-15).
+    /// - Standalone text threads use `channel_type: 11` (public).
+    /// Forum/media channels also accept `applied_tags` (crate field).
+    pub async fn create_thread(
+        &mut self,
+        channel_id: &str,
+        name: &str,
+        archive_minutes: Option<u32>,
+        starter: Option<&str>,
+        applied_tags: Option<Vec<String>>,
+    ) -> Result<ThreadResult> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let inner = self.inner()?;
+        let mut req = discord_user::types::CreateThreadRequest::public(name);
+        req.auto_archive_duration = archive_minutes;
+        req.applied_tags = applied_tags;
+        // Forum (15) / media (16) channels require a message payload.
+        if let Some(starter) = starter {
+            req.message = Some(serde_json::json!({
+                "content": starter,
+                "tts": false,
+                "allowed_mentions": null,
+                "attachments": [],
+            }));
+        }
+        let resp: RawChannel = inner
+            .post(Route::CreateThread { channel_id: cid }, req)
+            .await
+            .context("POST /channels/{id}/threads failed")?;
+        Ok(ThreadResult {
+            id: resp.id.to_string(),
+            name: resp.name.clone().unwrap_or_default(),
+            channel_id: channel_id.to_string(),
+            channel_type: resp.channel_type,
+            parent_message_id: None,
+        })
+    }
+
+    /// `POST /channels/{id}/messages/{mid}/threads` — create a thread from a
+    /// message (parent must be text/announcement; Escape-Tech path 2).
+    pub async fn create_thread_from_message(
+        &mut self,
+        channel_id: &str,
+        message_id: &str,
+        name: &str,
+        archive_minutes: Option<u32>,
+    ) -> Result<ThreadResult> {
+        let cid: u64 = channel_id.parse().context("invalid channel id")?;
+        let mid: u64 = message_id.parse().context("invalid message id")?;
+        let inner = self.inner()?;
+        let mut req = discord_user::types::CreateThreadRequest::public(name);
+        req.auto_archive_duration = archive_minutes;
+        let resp: RawChannel = inner
+            .post(
+                Route::CreateThreadFromMessage {
+                    channel_id: cid,
+                    message_id: mid,
+                },
+                req,
+            )
+            .await
+            .context("POST /channels/{id}/messages/{mid}/threads failed")?;
+        Ok(ThreadResult {
+            id: resp.id.to_string(),
+            name: resp.name.clone().unwrap_or_default(),
+            channel_id: channel_id.to_string(),
+            channel_type: resp.channel_type,
+            parent_message_id: Some(message_id.to_string()),
+        })
+    }
+
     /// `POST /channels/{id}/typing` — send typing indicator (no body).
     /// Reference: discordo composer.sendTyping() → Client.Typing (10s throttle
     /// enforced by caller; API itself is fire-and-forget).
@@ -849,6 +923,17 @@ struct RawChannel {
     parent_id: Option<String>,
     #[serde(default)]
     position: i32,
+}
+
+/// Result of thread creation (type discriminator for output).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ThreadResult {
+    pub id: String,
+    pub name: String,
+    pub channel_id: String,
+    pub channel_type: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
