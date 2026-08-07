@@ -371,7 +371,7 @@ enum Command {
         #[arg(short, long)]
         yes: bool,
     },
-    /// Auth: auto-detect token, or paste manually, validate, save.
+    /// Auth: auto-detect token, paste, or QR scan; validate, save.
     Auth {
         /// Save the detected/pasted token to .env.
         #[arg(long)]
@@ -379,6 +379,9 @@ enum Command {
         /// Paste the token manually instead of auto-detect.
         #[arg(long)]
         paste: bool,
+        /// Authenticate by scanning a QR code with the Discord mobile app.
+        #[arg(long)]
+        qr: bool,
     },
     /// Start the MCP server (stdio) for AI agents.
     Serve,
@@ -579,7 +582,7 @@ async fn run() -> ExitCode {
             output,
         }) => commands::local::cmd_export(&channel, json, output.as_deref(), format),
         Some(Command::Purge { channel, yes }) => commands::local::cmd_purge(&channel, yes, format),
-        Some(Command::Auth { save, paste }) => cmd_auth(save, paste, format).await,
+        Some(Command::Auth { save, paste, qr }) => cmd_auth(save, paste, qr, format).await,
         Some(Command::Serve) => cmd_serve().await,
         None => {
             // No subcommand: print help.
@@ -614,7 +617,31 @@ async fn cmd_status(cli: &Cli, format: Format) -> ExitCode {
 }
 
 /// `auth [--save] [--paste]` — auto-detect or paste token, validate, save.
-async fn cmd_auth(save: bool, paste: bool, format: Format) -> ExitCode {
+async fn cmd_auth(save: bool, paste: bool, qr: bool, format: Format) -> ExitCode {
+    // QR flow (opt-in, highest ToS risk — review#18: only on explicit --qr).
+    if qr {
+        match discord_auth::qr::qr_login(120).await {
+            Ok(token) => {
+                if save {
+                    if let Err(e) = discord_auth::auth::save_token_to_env(&token, None) {
+                        return ExitCode::from(output::emit_error(
+                            "AuthError",
+                            &e.to_string(),
+                            exit::ERROR,
+                        ));
+                    }
+                }
+                let _ = output::emit(
+                    &serde_json::json!({ "authenticated": true, "token_saved": save, "source": "qr" }),
+                    format,
+                );
+                return ExitCode::from(exit::OK);
+            }
+            Err(e) => {
+                return ExitCode::from(output::emit_error("AuthError", &e.to_string(), exit::ERROR))
+            }
+        }
+    }
     // Paste flow.
     if paste {
         match discord_auth::auth::auth_paste(save).await {

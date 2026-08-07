@@ -280,3 +280,13 @@ fn download_help_shows_flags() {
     assert!(stdout.contains("--min-reactions"), "stdout: {stdout}");
     assert!(stdout.contains("--type"), "stdout: {stdout}");
 }
+
+#[test]
+fn auth_help_shows_qr_flag() {
+    let out = Command::new(env!("CARGO_BIN_EXE_discord"))
+        .args(["auth", "--help"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("--qr"), "stdout: {stdout}");
+}
