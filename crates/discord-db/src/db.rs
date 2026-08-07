@@ -4,7 +4,7 @@
 //! `db.py` (Apache-2.0). Verified in plan §6.
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 /// Open the database at `path`, apply schema, return the connection.
 /// WAL + foreign_keys; single-writer semantics.
@@ -211,8 +211,8 @@ pub fn recent_messages(
     );
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     if let Some(ch) = channel_name {
-        sql.push_str(" AND c.name = ?");
-        params.push(Box::new(ch.to_string()));
+        sql.push_str(" AND c.name LIKE ?");
+        params.push(Box::new(format!("%{}%", ch)));
     }
     if let Some(h) = hours {
         sql.push_str(" AND m.timestamp >= datetime('now', ?)");
@@ -283,8 +283,8 @@ pub fn top_senders(
     );
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     if let Some(ch) = channel_name {
-        sql.push_str(" AND c.name = ?");
-        params.push(Box::new(ch.to_string()));
+        sql.push_str(" AND c.name LIKE ?");
+        params.push(Box::new(format!("%{}%", ch)));
     }
     sql.push_str(" GROUP BY author_name ORDER BY cnt DESC LIMIT ?");
     params.push(Box::new(limit));
@@ -345,12 +345,24 @@ pub fn purge_channel(conn: &Connection, channel_id: &str) -> Result<usize> {
 
 /// Find a channel ID by name or ID (used by download --channel).
 pub fn find_channel_id(conn: &Connection, name: &str) -> Result<Option<String>> {
+    // Exact ID/name first, then substring (channel names carry emoji/decoration
+    // suffixes like "chit-chat┊💬", so "chit-chat" must still resolve).
+    let exact = conn
+        .query_row(
+            "SELECT id FROM channels WHERE id = ?1 OR name = ?2 LIMIT 1",
+            params![name, name],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(id) = exact {
+        return Ok(Some(id));
+    }
     let mut stmt = conn
-        .prepare("SELECT id FROM channels WHERE id = ?1 OR name = ?2 LIMIT 1")
-        .context("prepare find_channel_id")?;
+        .prepare("SELECT id FROM channels WHERE name LIKE ?1 LIMIT 1")
+        .context("prepare find_channel_id (fuzzy)")?;
     let mut rows = stmt
-        .query(params![name, name])
-        .context("query find_channel_id")?;
+        .query(params![format!("%{}%", name)])
+        .context("query find_channel_id (fuzzy)")?;
     Ok(rows.next()?.map(|r| r.get(0)).transpose()?)
 }
 
@@ -422,8 +434,8 @@ pub fn top_reacted(
         params.push(Box::new(g.to_string()));
     }
     if let Some(c) = channel_name {
-        sql.push_str(" AND c.name = ?");
-        params.push(Box::new(c.to_string()));
+        sql.push_str(" AND c.name LIKE ?");
+        params.push(Box::new(format!("%{}%", c)));
     }
     sql.push_str(" ORDER BY m.reaction_count DESC, m.id DESC LIMIT ?");
     params.push(Box::new(limit));

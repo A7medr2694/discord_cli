@@ -422,13 +422,24 @@ async fn resolve_channel_id(client: &mut ApiClient, channel: &str) -> Result<Str
             )))
         }
     };
+    let needle = channel.to_lowercase();
     for g in &guilds {
-        if let Ok(chs) = client.list_channels(&g.id).await {
-            if let Some(c) = chs
-                .iter()
-                .find(|c| c.name.to_lowercase() == channel.to_lowercase())
-            {
+        // Use get_guild_channels_all (all channel types, no text-like filter)
+        // and match exact-first, then substring — channel names often carry
+        // emoji/decoration suffixes (e.g. "chit-chat┊💬"), so "chit-chat"
+        // must still resolve (matches resolve_guild_id's contains pattern).
+        if let Ok(chs) = client.get_guild_channels_all(&g.id).await {
+            // Exact match first.
+            if let Some(c) = chs.iter().find(|c| c.name.to_lowercase() == needle) {
                 return Ok(c.id.clone());
+            }
+            // Substring/contains fallback (exact failed).
+            let fuzzy: Vec<&discord_core::types::Channel> = chs
+                .iter()
+                .filter(|c| c.name.to_lowercase().contains(&needle))
+                .collect();
+            if fuzzy.len() == 1 {
+                return Ok(fuzzy[0].id.clone());
             }
         }
     }

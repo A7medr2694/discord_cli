@@ -99,7 +99,12 @@ pub fn cmd_export(channel: &str, as_json: bool, output: Option<&str>, format: Fo
             return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
         }
     };
-    let channel_id = channel.to_string();
+    // Resolve channel name → ID (channel may be passed as name, e.g.
+    // "chit-chat" for "chit-chat┊💬"). Falls back to treating input as ID.
+    let channel_id = match ddb::find_channel_id(&conn, channel) {
+        Ok(Some(id)) => id,
+        _ => channel.to_string(),
+    };
     match ddb::channel_messages(&conn, &channel_id, 1_000_000) {
         Ok(rows) => {
             let text = if as_json {
@@ -148,7 +153,12 @@ pub fn cmd_purge(channel: &str, yes: bool, format: Format) -> ExitCode {
             return ExitCode::from(output::emit_error("DbError", &e.to_string(), exit::ERROR))
         }
     };
-    match ddb::purge_channel(&conn, channel) {
+    // Resolve channel name → ID like export.
+    let channel_id = match ddb::find_channel_id(&conn, channel) {
+        Ok(Some(id)) => id,
+        _ => channel.to_string(),
+    };
+    match ddb::purge_channel(&conn, &channel_id) {
         Ok(n) => {
             let data =
                 serde_json::json!({ "purged": true, "channel": channel, "messages_deleted": n });
