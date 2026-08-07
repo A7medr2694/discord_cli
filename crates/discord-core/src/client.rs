@@ -527,7 +527,7 @@ impl ApiClient {
     /// - Forum (type 15) requires a starter `message` (defaults to the thread
     ///   name, Escape-Tech thread-create.js:11-15).
     /// - Standalone text threads use `channel_type: 11` (public).
-    /// Forum/media channels also accept `applied_tags` (crate field).
+    /// - Forum/media channels also accept `applied_tags` (crate field).
     pub async fn create_thread(
         &mut self,
         channel_id: &str,
