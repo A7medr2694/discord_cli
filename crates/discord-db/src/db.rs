@@ -398,6 +398,51 @@ pub fn channel_name(conn: &Connection, channel_id: &str) -> Result<String> {
         .unwrap_or_else(|| channel_id.into()))
 }
 
+/// Top-reacted messages (F8). JOINs channels/guilds so filters take names
+/// (review#6 — flags pass names, not IDs).
+pub fn top_reacted(
+    conn: &Connection,
+    guild_name: Option<&str>,
+    channel_name: Option<&str>,
+    limit: i64,
+) -> Result<Vec<crate::TopReaction>> {
+    let mut sql = String::from(
+        r#"
+        SELECT m.id, COALESCE(c.name, m.channel_id), COALESCE(g.name, 'DM'),
+               m.author_name, m.content, m.reaction_count, m.timestamp
+        FROM messages m
+        JOIN channels c ON m.channel_id = c.id
+        LEFT JOIN guilds g ON m.guild_id = g.id
+        WHERE m.reaction_count > 0
+        "#,
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    if let Some(g) = guild_name {
+        sql.push_str(" AND g.name = ?");
+        params.push(Box::new(g.to_string()));
+    }
+    if let Some(c) = channel_name {
+        sql.push_str(" AND c.name = ?");
+        params.push(Box::new(c.to_string()));
+    }
+    sql.push_str(" ORDER BY m.reaction_count DESC, m.id DESC LIMIT ?");
+    params.push(Box::new(limit));
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+        Ok(crate::TopReaction {
+            message_id: row.get(0)?,
+            channel_name: row.get(1)?,
+            guild_name: row.get(2)?,
+            author_name: row.get(3)?,
+            content: row.get(4)?,
+            reaction_count: row.get(5)?,
+            timestamp: row.get(6)?,
+        })
+    })?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .context("collect top_reacted")
+}
+
 /// FTS5 full-text search over stored messages (langkurt SQL, bind verbatim).
 pub fn search_messages(
     conn: &Connection,
@@ -533,5 +578,71 @@ mod tests {
         let (last, oldest) = get_sync_state(&conn, "c1").unwrap();
         assert_eq!(last, "700");
         assert_eq!(oldest, "050");
+    }
+}
+
+#[cfg(test)]
+mod top_reacted_tests {
+    use super::*;
+
+    fn conn() -> Connection {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE guilds (id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT);
+             CREATE TABLE channels (id TEXT PRIMARY KEY, guild_id TEXT REFERENCES guilds(id),
+                name TEXT NOT NULL, type INTEGER DEFAULT 0, topic TEXT, parent_id TEXT);
+             CREATE TABLE messages (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL,
+                guild_id TEXT, author_id TEXT, author_name TEXT, content TEXT,
+                timestamp TEXT, edited INTEGER DEFAULT 0, reaction_count INTEGER DEFAULT 0);
+             CREATE INDEX idx_messages_reactions ON messages(reaction_count DESC);",
+        )
+        .unwrap();
+        c
+    }
+
+    fn seed(c: &Connection) {
+        c.execute("INSERT INTO guilds VALUES ('g1','TestGuild',NULL)", [])
+            .unwrap();
+        c.execute(
+            "INSERT INTO channels VALUES ('c1','g1','general',0,NULL,NULL)",
+            [],
+        )
+        .unwrap();
+        let msgs = [
+            ("m1", "hi", "2"),
+            ("m2", "hot", "9"),
+            ("m3", "meh", "0"),
+            ("m4", "warm", "4"),
+        ];
+        for (id, content, rc) in msgs {
+            c.execute(
+                "INSERT INTO messages (id,channel_id,guild_id,author_id,author_name,content,timestamp,reaction_count) \
+                 VALUES (?1,'c1','g1','a','alice',?2,'2026-01-01',?3)",
+                params![id, content, rc],
+            ).unwrap();
+        }
+    }
+
+    #[test]
+    fn top_reacted_orders_desc() {
+        let c = conn();
+        seed(&c);
+        let top = top_reacted(&c, None, None, 10).unwrap();
+        assert_eq!(top.len(), 3); // excludes reaction_count=0
+        assert_eq!(top[0].content, "hot");
+        assert_eq!(top[0].reaction_count, 9);
+        assert_eq!(top[2].content, "hi");
+    }
+
+    #[test]
+    fn top_reacted_filters_by_guild_and_channel() {
+        let c = conn();
+        seed(&c);
+        let by_guild = top_reacted(&c, Some("TestGuild"), None, 10).unwrap();
+        assert_eq!(by_guild.len(), 3);
+        let by_channel = top_reacted(&c, None, Some("general"), 10).unwrap();
+        assert_eq!(by_channel.len(), 3);
+        let miss = top_reacted(&c, Some("Nope"), None, 10).unwrap();
+        assert!(miss.is_empty());
     }
 }

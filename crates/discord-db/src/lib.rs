@@ -50,6 +50,18 @@ pub struct TopSender {
     pub message_count: i64,
 }
 
+/// Top-reacted message (F8: hottest messages by reaction_count).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TopReaction {
+    pub message_id: String,
+    pub channel_name: String,
+    pub guild_name: String,
+    pub author_name: String,
+    pub content: String,
+    pub reaction_count: i64,
+    pub timestamp: String,
+}
+
 /// Export row (id, author, content, timestamp).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ExportRow {
