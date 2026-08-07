@@ -17,7 +17,7 @@
 **A Discord CLI + MCP server that operates your *user account* — so it sees every server, group, and DM you belong to. No bot invitation required.**  
 Built in Rust for AI agents and terminal-first humans: 33 commands, SQLite archive with FTS5 search, stealth-aware, and an MCP server that plugs straight into Claude Code.
 
-> ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`.
+> ⚠️ **ToS / account-risk warning** — Automating a user account violates Discord's Terms of Service and can result in account termination. Use only on accounts you control, with restraint: rate limits are built in, reads are bounded, and destructive actions require explicit `--confirm`. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic.
 
 ---
 
@@ -144,7 +144,7 @@ discord watch --keyword "incident" --jsonl
 
 | Command | What it does |
 |---------|--------------|
-| `auth [--save] [--paste]` | Auto-detect token from local Discord/browser, or paste; validate + save |
+| `auth [--save] [--paste] [--qr]` | Auto-detect token, paste, or QR scan (mobile); validate + save |
 | `status` | Validate configured token (exit 1 on failure) |
 | `whoami [--json]` | Show the authenticated user's profile |
 

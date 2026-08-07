@@ -8,7 +8,7 @@ A Rust CLI + MCP server that operates a **user** Discord account (self-bot style
 
 ## ⚠️ Non-negotiable
 
-- **ToS risk**: user-token automation can get the account banned. Never bulk-crawl, never `sync-all` unbounded, always respect rate limits.
+- **ToS risk**: user-token automation can get the account banned. Never bulk-crawl, never `sync-all` unbounded, always respect rate limits. `auth --qr` uses Discord's login API (highest risk) — opt-in only, never automatic.
 - **Destructive actions require `--confirm`** — the agent must not bypass this.
 - **Never print or log the token.**
 
