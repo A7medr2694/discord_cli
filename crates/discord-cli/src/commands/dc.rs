@@ -368,7 +368,7 @@ pub async fn dc_guilds(ctx: &DcCtx) -> ExitCode {
             let _ = output::emit(&guilds, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -387,7 +387,7 @@ pub async fn dc_channels(ctx: &DcCtx, guild: &str) -> ExitCode {
             let _ = output::emit(&channels, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -402,7 +402,7 @@ pub async fn dc_dms(ctx: &DcCtx) -> ExitCode {
             let _ = output::emit(&dms, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -475,7 +475,7 @@ pub async fn dc_history(
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -498,7 +498,7 @@ pub async fn dc_read(ctx: &DcCtx, channel: &str, limit: usize, before: Option<u6
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -517,7 +517,17 @@ pub async fn dc_members(ctx: &DcCtx, guild: &str, max: u32) -> ExitCode {
             let _ = output::emit(&members, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            // User tokens often get 403 on GET /guilds/{id}/members (Discord
+            // reserves it for bots with GUILD_MEMBERS intent). Surface that
+            // clearly as FORBIDDEN (exit 4) with a hint rather than a generic
+            // API error.
+            let code = classify(&e);
+            if code == exit::FORBIDDEN {
+                eprintln!("Discord blocks member listing for user tokens on this guild (GET /guilds/{{id}}/members is bot-only here). Use `discord members` with a bot token, or `discord search-guild` / relationships instead.");
+            }
+            ExitCode::from(output::emit_error("ApiError", &e.to_string(), code))
+        }
     }
 }
 
@@ -536,7 +546,7 @@ pub async fn dc_info(ctx: &DcCtx, guild: &str) -> ExitCode {
             let _ = output::emit(&info, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -564,7 +574,10 @@ pub async fn dc_search(
             let _ = output::emit(&msgs, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => {
+            let code = classify(&e);
+            ExitCode::from(output::emit_error("ApiError", &e.to_string(), code))
+        }
     }
 }
 
@@ -583,7 +596,7 @@ pub async fn dc_roles(ctx: &DcCtx, guild: &str) -> ExitCode {
             let _ = output::emit(&roles, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -598,7 +611,7 @@ pub async fn dc_profile(ctx: &DcCtx, user_id: Option<&str>) -> ExitCode {
         None => match client.get_me().await {
             Ok(me) => me.id,
             Err(e) => {
-                return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+                return ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e)))
             }
         },
     };
@@ -607,7 +620,7 @@ pub async fn dc_profile(ctx: &DcCtx, user_id: Option<&str>) -> ExitCode {
             let _ = output::emit(&profile, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -622,7 +635,7 @@ pub async fn dc_relationships(ctx: &DcCtx) -> ExitCode {
             let _ = output::emit(&rels, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -641,7 +654,7 @@ pub async fn dc_threads(ctx: &DcCtx, channel: &str) -> ExitCode {
             let _ = output::emit(&threads, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -879,7 +892,7 @@ pub async fn dc_send(ctx: &DcCtx, channel: &str, opts: SendOpts<'_>) -> ExitCode
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -899,7 +912,7 @@ pub async fn dc_typing(ctx: &DcCtx, channel: &str) -> ExitCode {
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -933,7 +946,11 @@ pub async fn dc_join(ctx: &DcCtx, invite: &str, confirm: bool) -> ExitCode {
                 .unwrap_or_else(|| "unknown".to_string());
             let members = info.approximate_member_count.unwrap_or(0);
             if let Err(e) = client.accept_invite(&code).await {
-                return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR));
+                return ExitCode::from(output::emit_error(
+                    "ApiError",
+                    &e.to_string(),
+                    classify(&e),
+                ));
             }
             let data = serde_json::json!({
                 "joined": true,
@@ -944,7 +961,7 @@ pub async fn dc_join(ctx: &DcCtx, invite: &str, confirm: bool) -> ExitCode {
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -969,7 +986,7 @@ pub async fn dc_leave(ctx: &DcCtx, guild: &str, confirm: bool) -> ExitCode {
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1087,7 +1104,7 @@ pub async fn dc_thread_create(
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1107,7 +1124,7 @@ pub async fn dc_edit(ctx: &DcCtx, channel: &str, message_id: &str, text: &str) -
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1133,7 +1150,7 @@ pub async fn dc_delete(ctx: &DcCtx, channel: &str, message_id: &str, confirm: bo
             let _ = output::emit(&data, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1152,7 +1169,7 @@ pub async fn dc_react(ctx: &DcCtx, channel: &str, message_id: &str, emoji: &str)
             let _ = output::emit(&serde_json::json!({ "reacted": true }), ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1171,7 +1188,7 @@ pub async fn dc_unreact(ctx: &DcCtx, channel: &str, message_id: &str, emoji: &st
             let _ = output::emit(&serde_json::json!({ "unreacted": true }), ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1190,7 +1207,7 @@ pub async fn dc_pin(ctx: &DcCtx, channel: &str, message_id: &str) -> ExitCode {
             let _ = output::emit(&serde_json::json!({ "pinned": true }), ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1209,7 +1226,7 @@ pub async fn dc_pins(ctx: &DcCtx, channel: &str) -> ExitCode {
             let _ = output::emit(&pins, ctx.format);
             ExitCode::from(exit::OK)
         }
-        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+        Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
     }
 }
 
@@ -1242,7 +1259,7 @@ pub async fn dc_sync_all(ctx: &DcCtx, limit: usize) -> ExitCode {
     let guilds = match client.list_guilds().await {
         Ok(g) => g,
         Err(e) => {
-            return ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+            return ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e)))
         }
     };
     let mut total = 0usize;
@@ -3337,7 +3354,7 @@ pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
                     ExitCode::from(exit::OK)
                 }
                 Err(e) => {
-                    ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR))
+                    ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e)))
                 }
             }
         }
@@ -3349,7 +3366,7 @@ pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
                 );
                 ExitCode::from(exit::OK)
             }
-            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
         },
         DmGroupCmd::Remove { channel, user } => match client.group_dm_remove(&channel, &user).await
         {
@@ -3360,7 +3377,7 @@ pub async fn dc_dm_group(ctx: &DcCtx, cmd: DmGroupCmd) -> ExitCode {
                 );
                 ExitCode::from(exit::OK)
             }
-            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), exit::ERROR)),
+            Err(e) => ExitCode::from(output::emit_error("ApiError", &e.to_string(), classify(&e))),
         },
     }
 }
